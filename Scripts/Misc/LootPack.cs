@@ -52,12 +52,14 @@ namespace Server
             return (int)(Math.Pow(luck, 1 / 1.8) * 100);
         }
 
-		public static int GetLuckChanceForKiller(Mobile dead)
+		public static int GetLuckChanceForKiller(Mobile m)
 		{
+            BaseCreature dead = m as BaseCreature;
+
             if (dead == null)
                 return 240;
 
-			var list = BaseCreature.GetLootingRights(dead.DamageEntries, dead.HitsMax);
+			var list = dead.GetLootingRights();
 
 			DamageStore highest = null;
 
@@ -678,7 +680,7 @@ namespace Server
 					if (Core.AOS)
 					{
                         // Try to generate a new random item based on the creature killed
-                        if (from is BaseCreature)
+                        if (Core.HS && RandomItemGenerator.Enabled && from is BaseCreature)
                         {
                             if (RandomItemGenerator.GenerateRandomItem(item, ((BaseCreature)from).LastKiller, (BaseCreature)from))
                                 return item;

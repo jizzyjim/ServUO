@@ -693,12 +693,26 @@ namespace Server.Spells
             int v = (int)type;
             bool isValid = true;
 
+            BaseRegion destination = Region.Find(loc, map) as BaseRegion;
+            BaseRegion current = Region.Find(caster.Location, map) as BaseRegion;
+
+            if (destination != null && !destination.CheckTravel(caster, loc, type))
+                isValid = false;
+
+            if (isValid && current != null && !current.CheckTravel(caster, loc, type))
+                isValid = false;
+
             #region Mondain's Legacy
             if (m_TravelCaster != null && m_TravelCaster.Region != null)
             {
                 if (m_TravelCaster.Region.IsPartOf("Blighted Grove") && loc.Z < -10)
                     isValid = false;
             }
+            #endregion
+
+            #region High Seas
+            if (BaseBoat.IsDriving(caster))
+                return false;
             #endregion
 
             for (int i = 0; isValid && i < m_Validators.Length; ++i)
@@ -1374,7 +1388,7 @@ namespace Server.Spells
                 caster.SendLocalizedMessage(1061091); // You cannot cast that spell in this form.
                 return false;
             }
-			else if (caster.Flying)
+			else if (caster.Flying && !(spell is VampiricEmbraceSpell))
 			{
 				caster.SendLocalizedMessage(1112567); // You are flying.
 				return false;

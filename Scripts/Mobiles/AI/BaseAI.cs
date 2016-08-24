@@ -46,7 +46,8 @@ namespace Server.Mobiles
         AI_Samurai,
         AI_Ninja,
         AI_Spellweaving,
-        AI_Mystic
+        AI_Mystic,
+        AI_Paladin,
 	}
 
 	public enum ActionType
@@ -863,7 +864,10 @@ namespace Server.Mobiles
 				return false;
 			}
 
-			if (CheckFlee())
+            if (CheckCharming())
+                return true;
+
+            if (CheckFlee())
 			{
 				return true;
 			}
@@ -1321,7 +1325,20 @@ namespace Server.Mobiles
 			return true;
 		}
 
-		public virtual bool CheckHerding()
+        public virtual bool CheckCharming()
+        {
+            Point2D target = m_Mobile.CharmTarget;
+
+            if (target == Point2D.Zero)
+                return false;
+
+            if (m_Mobile.GetDistanceToSqrt(target) >= 1)
+                DoMove(m_Mobile.GetDirectionTo(target));
+
+            return true;
+        }
+
+        public virtual bool CheckHerding()
 		{
 			IPoint2D target = m_Mobile.TargetLocation;
 

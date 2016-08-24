@@ -1,145 +1,317 @@
-﻿using System;
+﻿#region Header
+// **********
+// ServUO - Honesty.cs
+// **********
+#endregion
+
+#region References
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
 using Server.Items;
+using Server.Mobiles;
+#endregion
 
 namespace Server.Services.Virtues
 {
-	class Honesty
+	public static class Honesty
 	{
-		private static List<Item> _HonestyItems = new List<Item>();
+		public static bool Enabled = false;
+
+		public static int MaxGeneration = 1000;
+
+		public static bool TrammelGeneration = true;
+
+		private static readonly string[] _Regions =
+		{
+			"Britain", "Minoc", "Magincia", "Trinsic", "Jhelom", "Moonglow",
+			"Skara Brae", "Yew"
+		};
+
+		private static readonly List<Item> _Items;
+		private static readonly object _ItemsLock;
+
+		private static readonly List<int>[] _Invalid;
+		private static readonly object _InvalidLock;
+
+		private static readonly Rectangle2D _Bounds = new Rectangle2D(0, 0, 5119, 4095);
+
+		static Honesty()
+		{
+			_Items = new List<Item>(0x400);
+			_ItemsLock = ((ICollection)_Items).SyncRoot;
+
+			_Invalid = new[] {new List<int>(0x1000), new List<int>(0x1000)};
+			_InvalidLock = ((ICollection)_Invalid).SyncRoot;
+		}
 
 		public static void Initialize()
 		{
-			if (Core.SA)
+			EventSink.ItemCreated += OnItemCreated;
+			EventSink.ItemDeleted += OnItemDeleted;
+			EventSink.AfterWorldSave += OnAfterSave;
+
+			VirtueGump.Register(106, OnVirtueUsed);
+		}
+
+		private static void OnItemCreated(ItemCreatedEventArgs e)
+		{
+			if (!e.Item.HonestyItem)
 			{
-				VirtueGump.Register(106, OnVirtueUsed);
-				EventSink.AfterWorldSave += EventSinkAfterWorldSave;
+				return;
+			}
+
+			lock (_ItemsLock)
+			{
+				if (!_Items.Contains(e.Item))
+				{
+					_Items.Add(e.Item);
+				}
 			}
 		}
 
+		private static void OnItemDeleted(ItemDeletedEventArgs e)
+		{
+			if (!e.Item.HonestyItem)
+			{
+				return;
+			}
+
+			lock (_ItemsLock)
+			{
+				_Items.Remove(e.Item);
+			}
+		}
+
+		private static void OnAfterSave(AfterWorldSaveEventArgs e)
+		{
+			World.WaitForWriteCompletion();
+
+			PruneTaken();
+
+			if (Enabled)
+			{
+				GenerateHonestyItems();
+			}
+		}
 
 		public static void OnVirtueUsed(Mobile from)
 		{
-			from.SendLocalizedMessage(1053001); // This virtue is not activated through the virtue menu.
+			if (Enabled)
+			{
+				from.SendLocalizedMessage(1053001); // This virtue is not activated through the virtue menu.
+			}
 		}
 
-		private static void EventSinkAfterWorldSave(AfterWorldSaveEventArgs worldSaveEventArgs)
+		private static void PruneTaken()
 		{
-			UpdateList();
-			Task.Factory.StartNew(GenerateHonestyItems);
-
-
+			lock (_ItemsLock)
+			{
+				_Items.RemoveAll(ItemFlags.GetTaken);
+			}
 		}
 
 		private static void GenerateHonestyItems()
 		{
-
-			var lstCopy = new List<Item>(_HonestyItems);
-			foreach (Item i in lstCopy)
+			try
 			{
-				if (ItemFlags.GetTaken(i) && _HonestyItems.Contains(i))
+				var count = MaxGeneration - _Items.Count;
+
+				var spawned = new Item[count];
+
+				for (var i = 0; i < spawned.Length; i++)
 				{
-					_HonestyItems.Remove(i);
+					var item = spawned[i] = Loot.RandomArmorOrShieldOrWeapon();
+
+					if (item == null || item.Deleted)
+					{
+						--i;
+
+						continue;
+					}
+
+					item.HonestyItem = true;
+
+					lock (_ItemsLock)
+					{
+						if (!_Items.Contains(item))
+						{
+							_Items.Add(item);
+						}
+					}
+				}
+
+				var locs = new Dictionary<Map, Point3D?[]>();
+
+				if (TrammelGeneration)
+				{
+					locs[Map.Trammel] = new Point3D?[spawned.Length];
+				}
+
+				locs[Map.Felucca] = new Point3D?[spawned.Length];
+
+				Parallel.For(
+					0,
+					spawned.Length,
+					i =>
+					{
+						var map = TrammelGeneration && Utility.RandomBool() ? Map.Trammel : Map.Felucca;
+
+						locs[map][i] = GetValidLocation(map);
+					});
+
+				foreach (var kv in locs)
+				{
+					var map = kv.Key;
+					var points = kv.Value;
+
+					for (var i = 0; i < spawned.Length;)
+					{
+						var loc = points[i];
+
+						if (loc == null || loc == Point3D.Zero)
+						{
+							continue;
+						}
+
+						var item = spawned[i];
+
+						if (item == null || item.Deleted)
+						{
+							continue;
+						}
+
+						item.HonestyRegion = _Regions[Utility.Random(_Regions.Length)];
+
+						if (!String.IsNullOrWhiteSpace(item.HonestyRegion))
+						{
+							var attempts = BaseVendor.AllVendors.Count / 10;
+
+							BaseVendor m;
+
+							do
+							{
+								m = BaseVendor.AllVendors[Utility.Random(BaseVendor.AllVendors.Count)];
+							}
+							while ((m == null || m.Map != map || !m.Region.IsPartOf(item.HonestyRegion)) && --attempts >= 0);
+
+							item.HonestyOwner = m;
+						}
+
+						ItemFlags.SetTaken(item, false);
+
+						item.MoveToWorld(loc.Value, map);
+
+						spawned[i] = null;
+					}
+				}
+
+				foreach (var item in spawned.Where(item => item != null && !item.Deleted))
+				{
+					item.Delete();
 				}
 			}
-
-			if (_HonestyItems.Count < 1000)
+			catch (Exception e)
 			{
-				int spawnamount = _HonestyItems.Count + 50 > 1000 ? _HonestyItems.Count % 50 : 50;
+				Utility.PushColor(ConsoleColor.Red);
+				Console.WriteLine(e);
+				Utility.PopColor();
+			}
+		}
 
-				for (int i = 0; i < spawnamount; i++)
+		private static Point3D? GetValidLocation(Map map)
+		{
+			if (map == null)
+			{
+				return null;
+			}
+
+			var index = map == Map.Trammel ? 0 : 1;
+
+			var attempts = (int)(Math.Sqrt(_Bounds.Width * _Bounds.Height) / 10);
+
+			int x, y, h;
+			bool valid;
+
+			do
+			{
+				x = Utility.RandomMinMax(_Bounds.Start.X, _Bounds.End.X);
+				y = Utility.RandomMinMax(_Bounds.Start.Y, _Bounds.End.Y);
+
+				unchecked
 				{
-					Item toSpawn = Loot.RandomArmorOrShieldOrWeapon();
-					ItemFlags.SetTaken(toSpawn, false);
-					toSpawn.HonestyItem = true;
-					PlaceItemOnWorld(toSpawn);
-					_HonestyItems.Add(toSpawn);
+					h = (x + map.Width) * y;
+					h = (h * 397) ^ x;
+					h = (h * 397) ^ y;
+				}
+
+				lock (_InvalidLock)
+				{
+					if (_Invalid[index].Contains(h))
+					{
+						valid = false;
+						continue;
+					}
+				}
+
+				valid = TreasureMap.ValidateLocation(x, y, map);
+
+				if (!valid)
+				{
+					lock (_InvalidLock)
+					{
+						_Invalid[index].Add(h);
+					}
 				}
 			}
-
-
-		}
-
-		private static void UpdateList()
-		{
-			_HonestyItems =
-			   World.Items.Values.Where(
-				   m =>
-					   m.HonestyItem).ToList();
-		}
-
-		private static void PlaceItemOnWorld(Item item)
-		{
-			Rectangle2D rect = new Rectangle2D(0, 0, 5119, 4095);
-
-			var placeCoords = new Point3D();
-
-			Map map = Utility.RandomBool() ? Map.Trammel : Map.Felucca;
-
-			while (true)
+			while (!valid && --attempts >= 0);
+			
+			if (valid)
 			{
-				var x = Utility.Random(rect.X, rect.Width);
-				var y = Utility.Random(rect.Y, rect.Height);
-
-				if (!TreasureMap.ValidateLocation(x, y, map)) continue;
-				placeCoords.X = x;
-				placeCoords.Y = y;
-				placeCoords.Z = map.GetAverageZ(x, y);
-
-				break;
+				return new Point3D(x, y, map.GetAverageZ(x, y));
 			}
 
-			item.MoveToWorld(placeCoords, map);
+			return null;
 		}
-
 	}
 
 	public class HonestyChest : Container
 	{
 		[Constructable]
-		public HonestyChest() : base(0x9A9)
+		public HonestyChest()
+			: base(0x9A9)
 		{
-			Name = "Lost and Found box";
+			Name = "Lost And Found Box";
 		}
 
-		public HonestyChest(Serial serial) : base(serial)
-		{
-
-		}
+		public HonestyChest(Serial serial)
+			: base(serial)
+		{ }
 
 		public override bool OnDragDrop(Mobile from, Item dropped)
 		{
-			if (!dropped.HonestyItem)
-			{
-				from.SendLocalizedMessage(1151530);
-				return false;
-			}
-			Region reg = Region.Find(Location, Map);
-
-			bool gainedPath = false;
-			if (dropped.HonestyRegion == reg.Name)
-			{
-				VirtueHelper.Award(from, VirtueName.Honesty, 60, ref gainedPath);
-			}
-			else
-			{
-				VirtueHelper.Award(from, VirtueName.Honesty, 30, ref gainedPath);
-			}
-
-			from.SendMessage(gainedPath ? "You have gained a path in Honesty!" : "You have gained in Honesty.");
-
-			dropped.Delete();
-			return true;
+			return CheckGain(from, dropped);
 		}
 
 		public override bool OnDragDropInto(Mobile from, Item item, Point3D p)
 		{
-			if (!item.HonestyItem) return false;
-			Region reg = Region.Find(Location, Map);
+			return CheckGain(from, item);
+		}
 
-			bool gainedPath = false;
+		public bool CheckGain(Mobile from, Item item)
+		{
+			if (from == null || from.Deleted || item == null || !item.HonestyItem)
+			{
+				return false;
+			}
+
+			var reg = Region.Find(Location, Map);
+
+			var gainedPath = false;
+
 			if (item.HonestyRegion == reg.Name)
 			{
 				VirtueHelper.Award(from, VirtueName.Honesty, 60, ref gainedPath);
@@ -152,6 +324,7 @@ namespace Server.Services.Virtues
 			from.SendMessage(gainedPath ? "You have gained a path in Honesty!" : "You have gained in Honesty.");
 
 			item.Delete();
+
 			return true;
 		}
 
@@ -166,8 +339,7 @@ namespace Server.Services.Virtues
 		{
 			base.Deserialize(reader);
 
-			int version = reader.ReadInt();
+			reader.ReadInt();
 		}
-
 	}
 }

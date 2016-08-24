@@ -113,7 +113,7 @@ namespace Server.Mobiles
             int version = reader.ReadInt();
         }
 
-        public Item GetArtifact()
+        public virtual Item GetArtifact()
         {
             double random = Utility.RandomDouble();
             if (0.05 >= random)
@@ -145,13 +145,13 @@ namespace Server.Mobiles
             return artifact;
         }
 
-        public void GivePowerScrolls()
+        public virtual void GivePowerScrolls()
         {
             if (this.Map != Map.Felucca)
                 return;
 
             List<Mobile> toGive = new List<Mobile>();
-            List<DamageStore> rights = BaseCreature.GetLootingRights(this.DamageEntries, this.HitsMax);
+            List<DamageStore> rights = GetLootingRights();
 
             for (int i = rights.Count - 1; i >= 0; --i)
             {
@@ -222,7 +222,7 @@ namespace Server.Mobiles
             if (this.Map == Map.Felucca)
             {
                 //TODO: Confirm SE change or AoS one too?
-                List<DamageStore> rights = BaseCreature.GetLootingRights(this.DamageEntries, this.HitsMax);
+                List<DamageStore> rights = GetLootingRights();
                 List<Mobile> toGive = new List<Mobile>();
 
                 for (int i = rights.Count - 1; i >= 0; --i)
@@ -237,6 +237,9 @@ namespace Server.Mobiles
                     toGive[Utility.Random(toGive.Count)].AddToBackpack(new ChampionSkull(this.SkullType));
                 else
                     c.DropItem(new ChampionSkull(this.SkullType));
+
+                if(Core.SA)
+                    RefinementComponent.Roll(c, 3, 0.10);
             }
 
             base.OnDeath(c);

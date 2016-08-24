@@ -33,7 +33,7 @@ namespace Server
         private static readonly Type[] m_SAArmorTypes = new[]
 		{
 			typeof(GargishLeatherChest), typeof(GargishLeatherLegs), typeof(GargishLeatherArms), typeof(GargishLeatherKilt),
-			typeof(GargishLeatherWingArmor), typeof(GargishStoneChest), typeof(GargishStoneLegs), typeof(GargishStoneArms),
+			typeof(GargishStoneChest), typeof(GargishStoneLegs), typeof(GargishStoneArms),
 			typeof(GargishStoneKilt), typeof(GargishPlateChest), typeof(GargishPlateLegs), typeof(GargishPlateArms),
 			typeof(GargishPlateKilt), typeof(GargishNecklace), typeof( GargishEarrings )
 		};
@@ -42,8 +42,7 @@ namespace Server
 
         private static readonly Type[] m_SAClothingTypes = new[]
 		{
-			typeof(GargishClothChest), typeof(GargishClothArms), typeof(GargishClothKilt), typeof(GargishClothLegs),
-			typeof(GargishClothWingArmor)
+			typeof(GargishClothChestArmor), typeof(GargishClothArmsArmor), typeof(GargishClothKiltArmor), typeof(GargishClothLegsArmor),
 		};
 
         public static Type[] SAClothingTypes { get { return m_SAClothingTypes; } }

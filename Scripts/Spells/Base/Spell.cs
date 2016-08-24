@@ -199,14 +199,10 @@ namespace Server.Spells
 
 			damageBonus += sdiBonus;
 
-			TransformContext context = TransformationSpellHelper.GetContext(Caster);
-
-			if (context != null && context.Spell is ReaperFormSpell)
-			{
-				damageBonus += ((ReaperFormSpell)context.Spell).SpellDamageBonus;
-			}
-
 			damage = AOS.Scale(damage, 100 + damageBonus);
+
+            if (target != null && Feint.Registry.ContainsKey(target) && Feint.Registry[target].Enemy == Caster)
+                damage -= (int)((double)damage * ((double)Feint.Registry[target].DamageReduction / 100));
 
 			int evalSkill = GetDamageFixed(m_Caster);
 			int evalScale = 30 + ((9 * evalSkill) / 100);
@@ -247,7 +243,13 @@ namespace Server.Spells
 
                 #region Stygian Abyss
                 int focus = SAAbsorptionAttributes.GetValue(Caster, SAAbsorptionAttribute.CastingFocus);
-                if (focus > 12) focus = 12;
+
+                if (BaseFishPie.IsUnderEffects(m_Caster, FishPieEffect.CastFocus))
+                    focus += 2;
+
+                if (focus > 12) 
+                    focus = 12;
+
                 focus += m_Caster.Skills[SkillName.Inscribe].Value >= 50 ? GetInscribeFixed(m_Caster) / 200 : 0;
 
                 if (focus > 0 && focus > Utility.Random(100))
@@ -614,6 +616,14 @@ namespace Server.Spells
 
 		public virtual bool CheckCast()
 		{
+            #region High Seas
+            if (Server.Multis.BaseBoat.IsDriving(m_Caster) && m_Caster.AccessLevel == AccessLevel.Player)
+            {
+                m_Caster.SendLocalizedMessage(1049616); // You are too busy to do that at the moment.
+                return false;
+            }
+            #endregion
+
 			return true;
 		}
 
@@ -878,8 +888,6 @@ namespace Server.Spells
 
 			int fcr = AosAttributes.GetValue(m_Caster, AosAttribute.CastRecovery);
 
-			fcr -= ThunderstormSpell.GetCastRecoveryMalus(m_Caster);
-
 			int fcrDelay = -(CastRecoveryFastScalar * fcr);
 
 			int delay = CastRecoveryBase + fcrDelay;
@@ -927,16 +935,6 @@ namespace Server.Spells
 			if (fc > fcMax)
 			{
 				fc = fcMax;
-			}
-
-			if (ProtectionSpell.Registry.Contains(m_Caster))
-			{
-				fc -= 2;
-			}
-
-			if (EssenceOfWindSpell.IsDebuffed(m_Caster))
-			{
-				fc -= EssenceOfWindSpell.GetFCMalus(m_Caster);
 			}
 
 			TimeSpan baseDelay = CastDelayBase;

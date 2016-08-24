@@ -37,16 +37,20 @@ namespace Server.Commands
 			new CommandEntry("Doom Lamp",       "GenLeverPuzzle",   "LampPuzzleDelete",		105),
 			new CommandEntry("Doom Gauntlet",   "GenGauntlet",      "DeleteGauntlet",		106),
             new CommandEntry("Khaldun",         "GenKhaldun",       "DeleteKhaldun",        107),
-            new CommandEntry("Despise",         "SetupDespise",     "DeleteDespise",        108),
-            new CommandEntry("Stealables",      "GenStealArties",   "RemoveStealArties",	109),
-			new CommandEntry("Solen Hives",     "SHTelGen",         "SHTelGenDelete",		110),
-			new CommandEntry("Malas Secrets",   "SecretLocGen",     "SecretLocDelete",		111),
-			new CommandEntry("Factions",        "GenerateFactions",	"DeleteFactions",		112),
-			new CommandEntry("Primeival Lich",  "GenLichPuzzle",	"DeleteLichPuzzle",		113),
-			new CommandEntry("Decorations",     "Decorate",         "DecorateDelete",		114),
-			new CommandEntry("ML Decorations",  "DecorateML",		"DecorateMLDelete",		115),
-			new CommandEntry("SA Decorations",  "DecorateSA",		"DecorateSADelete",		116),
-			new CommandEntry("Spawners",		"XmlLoad Spawns",	"XmlSpawnerWipeAll",	117),
+            new CommandEntry("Stealables",      "GenStealArties",   "RemoveStealArties",	108),
+			new CommandEntry("Solen Hives",     "SHTelGen",         "SHTelGenDelete",		109),
+			new CommandEntry("Malas Secrets",   "SecretLocGen",     "SecretLocDelete",		110),
+			new CommandEntry("Factions",        "GenerateFactions",	"DeleteFactions",		111),
+			new CommandEntry("Primeival Lich",  "GenLichPuzzle",	"DeleteLichPuzzle",		112),
+			new CommandEntry("Decorations",     "Decorate",         "DecorateDelete",		113),
+			new CommandEntry("ML Decorations",  "DecorateML",		"DecorateMLDelete",		114),
+			new CommandEntry("SA Decorations",  "DecorateSA",		"DecorateSADelete",		115),
+			new CommandEntry("Spawners",		"XmlLoad Spawns",	"XmlSpawnerWipeAll",	116),
+            new CommandEntry("Despise",         "SetupDespise",     "DeleteDespise",        117),
+            new CommandEntry("Covetous",        "SetupNewCovetous", "DeleteCovetous",       118),
+            new CommandEntry("Shame",           "GenerateNewShame", "DeleteShame",          119),
+            new CommandEntry("New Magincia",    "GenNewMagincia",   "DeleteNewMagincia",    120),
+            new CommandEntry("High Seas",       "DecorateHS",       "DeleteHS",             121),
 		});
         public CreateWorld()
         {
@@ -145,7 +149,7 @@ namespace Server.Commands
 							case CreateWorld.GumpType.Delete:
 								if (!String.IsNullOrEmpty(entry.DeleteCommand))
 								{
-									from.Say("Recreating " + entry.Name);
+									from.Say("Deleting " + entry.Name);
 									CommandSystem.Handle(from, prefix + entry.DeleteCommand);
 								}
 								break;

@@ -250,7 +250,12 @@ namespace Server.Gumps
                                 budget = Math.Min(800, budget + 25);
                             }
 
-                            int maxprops = Math.Min(5, (budget / 110) + 1);
+                            int maxprops;
+                            if (attrs != null)
+                                maxprops = Utility.RandomMinMax(attrs.RunicMinAttributes, attrs.RunicMaxAttributes);
+                            else
+                                maxprops = Math.Min(5, (budget / 110) + 1);
+
                             if (maxprops == 5 && 0.10 > Utility.RandomDouble())
                                 maxprops = 6;
                             
@@ -329,7 +334,7 @@ namespace Server.Gumps
                 case CraftResource.Gold:
                 case CraftResource.HornedLeather:
                 case CraftResource.YewWood:
-                    budget = 550; break;
+                    budget = 600; break;
                 case CraftResource.Agapite:
                 case CraftResource.Verite: 
                     budget = 700; break;

@@ -132,6 +132,19 @@ namespace Server.Engines.Craft
         {
             int index = -1;
 
+            if (Core.HS)
+            {
+                #region High Seas
+                index = AddCraft(typeof(LightPowderCharge), 1044457, 1116159, 0.0, 50.0, typeof(Cloth), 1044286, 1, 1044253);
+                AddRes(index, typeof(BlackPowder), 1095826, 1, 1044253);
+                SetNeededExpansion(index, Expansion.HS);
+
+                index = AddCraft(typeof(HeavyPowderCharge), 1044457, 1116160, 0.0, 50.0, typeof(Cloth), 1044286, 1, 1044253);
+                AddRes(index, typeof(BlackPowder), 1095826, 4, 1044253);
+                SetNeededExpansion(index, Expansion.HS);
+            }
+            #endregion
+
             #region Hats
             this.AddCraft(typeof(SkullCap), 1011375, 1025444, 0.0, 25.0, typeof(Cloth), 1044286, 2, 1044287);
             this.AddCraft(typeof(Bandana), 1011375, 1025440, 0.0, 25.0, typeof(Cloth), 1044286, 2, 1044287);
@@ -520,14 +533,24 @@ namespace Server.Engines.Craft
             index = this.AddCraft(typeof(BoneChest), 1049149, 1025199, 96.0, 121.0, typeof(Leather), 1044462, 12, 1044463);
             this.AddRes(index, typeof(Bone), 1049064, 10, 1049063);
             #endregion
+
             #region Cloth Armor
             if (Core.SA)
             {
-                this.AddCraft(typeof(GargishClothArms), 1111748, 1021027, 53.9, 78.9, typeof(Cloth), 1044462, 8, 1044463);
-                this.AddCraft(typeof(GargishClothChest), 1111748, 1021029, 6.2, 31.2, typeof(Cloth), 1044462, 8, 1044463);
-                this.AddCraft(typeof(GargishClothKilt), 1111748, 1021031, 51.8, 76.8, typeof(Cloth), 1044462, 6, 1044463);
-                this.AddCraft(typeof(GargishClothLegs), 1111748, 1021033, 53.9, 78.9, typeof(Cloth), 1044462, 10, 1044463);
-                this.AddCraft(typeof(GargishClothWingArmor), 1111748, 1115393, 66.3, 91.3, typeof(Cloth), 1044462, 12, 1044463);
+                index = this.AddCraft(typeof(GargishClothArmsArmor), 1111748, 1021027, 87.1, 137.1, typeof(Cloth), 1044286, 8, 1044463);
+                this.SetNeededExpansion(index, Expansion.SA);
+                
+                index = this.AddCraft(typeof(GargishClothChestArmor), 1111748, 1021029, 94.0, 144.0, typeof(Cloth), 1044286, 8, 1044463);
+                this.SetNeededExpansion(index, Expansion.SA);
+                
+                index = this.AddCraft(typeof(GargishClothKiltArmor), 1111748, 1021031, 82.9, 132.9, typeof(Cloth), 1044286, 6, 1044463);
+                this.SetNeededExpansion(index, Expansion.SA);
+                
+                index = this.AddCraft(typeof(GargishClothLegsArmor), 1111748, 1021033, 91.2, 141.2, typeof(Cloth), 1044286, 10, 1044463);
+                this.SetNeededExpansion(index, Expansion.SA);
+                
+                index = this.AddCraft(typeof(GargishClothWingArmor), 1111748, 1115393, 65.0, 90.0, typeof(Cloth), 1044286, 12, 1044463);
+                this.SetNeededExpansion(index, Expansion.SA);
             }
             #endregion
 

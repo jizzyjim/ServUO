@@ -1884,19 +1884,6 @@ namespace Server
 			set
 			{
 				m_HonestyItem = value;
-				if (m_HonestyItem)
-				{
-
-					string[] regions = { "Britain", "Minoc", "Magincia", "Trinsic", "Jhelom", "Moonglow", "Skara Brae", "Yew" };
-					HonestyRegion = regions[Utility.Random(regions.Length - 1)];
-
-					List<Mobile> mobiles = World.Mobiles.Values.Where(m => m.Region.Name == HonestyRegion && (m.BodyValue == 400 || m.BodyValue == 401) && !m.Player).ToList();
-					if (mobiles.Count > 0)
-					{
-						HonestyOwner = mobiles[Utility.Random(mobiles.Count - 1)];
-					}
-				}
-
 				InvalidateProperties();
 			}
 		}
@@ -2263,7 +2250,7 @@ namespace Server
 			}
 		}
 
-		public Packet WorldPacketHS
+		public virtual Packet WorldPacketHS
 		{
 			get
 			{
@@ -2291,7 +2278,7 @@ namespace Server
 			}
 		}
 
-		public void ReleaseWorldPackets()
+		public virtual void ReleaseWorldPackets()
 		{
 			Packet.Release(ref m_WorldPacket);
 			Packet.Release(ref m_WorldPacketSA);
@@ -4366,6 +4353,8 @@ namespace Server
 			{
 				module.Delete();
 			}
+
+			Timer.DelayCall(EventSink.InvokeItemDeleted, new ItemDeletedEventArgs(this));
 		}
 
 		public virtual void RemoveItem(Item item)
@@ -5823,6 +5812,8 @@ namespace Server
 				World.m_ItemTypes.Add(ourType);
 				m_TypeRef = World.m_ItemTypes.Count - 1;
 			}
+
+			Timer.DelayCall(EventSink.InvokeItemCreated, new ItemCreatedEventArgs(this));
 		}
 
 		[Constructable]
@@ -5844,6 +5835,8 @@ namespace Server
 				World.m_ItemTypes.Add(ourType);
 				m_TypeRef = World.m_ItemTypes.Count - 1;
 			}
+
+			Timer.DelayCall(EventSink.InvokeItemCreated, new ItemCreatedEventArgs(this));
 		}
 
 		public virtual void OnSectorActivate()

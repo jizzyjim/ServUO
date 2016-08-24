@@ -3983,6 +3983,8 @@ namespace Server
 					module.Delete();
 				}
 			}
+
+			Timer.DelayCall(EventSink.InvokeMobileDeleted, new MobileDeletedEventArgs(this));
 		}
 
 		public virtual bool AllowSkillUse(SkillName name)
@@ -8776,7 +8778,7 @@ namespace Server
 		{
 			get
 			{
-				if (m_NetState != null && m_NetState.Socket == null)
+				if (m_NetState != null && m_NetState.Socket == null && !m_NetState.IsDisposing)
 				{
 					NetState = null;
 				}
@@ -10790,6 +10792,8 @@ namespace Server
 				World.m_MobileTypes.Add(ourType);
 				m_TypeRef = World.m_MobileTypes.Count - 1;
 			}
+
+			Timer.DelayCall(EventSink.InvokeMobileCreated, new MobileCreatedEventArgs(this));
 		}
 
 		public Mobile()
@@ -10809,6 +10813,8 @@ namespace Server
 				World.m_MobileTypes.Add(ourType);
 				m_TypeRef = World.m_MobileTypes.Count - 1;
 			}
+
+			Timer.DelayCall(EventSink.InvokeMobileCreated, new MobileCreatedEventArgs(this));
 		}
 
 		public void DefaultMobileInit()

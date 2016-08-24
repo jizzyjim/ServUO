@@ -15,21 +15,35 @@ namespace Server
         private readonly int m_Tooltip;
         private readonly int m_Hue;
         private readonly double m_Points;
-        public CollectionItem(Type type, int itemID, int tooltip, int hue, double points)
+        private readonly bool m_QuestItem;
+
+        public CollectionItem(Type type, int itemID, int tooltip, int hue, double points, bool questitem = false)
         {
             this.m_Type = type;
             this.m_ItemID = itemID;
             this.m_Tooltip = tooltip;
             this.m_Hue = hue;
             this.m_Points = points;
-			
-            int mx, my;			
-            mx = my = 0;
-			
-            Item.Measure(Item.GetBitmap(this.m_ItemID), out this.m_X, out this.m_Y, out mx, out my);
-			
-            this.m_Width = mx - this.m_X;
-            this.m_Height = my - this.m_Y;
+            this.m_QuestItem = questitem;
+
+            try
+            {
+                Rectangle2D rec = ItemBounds.Table[m_ItemID];
+                m_X = rec.X;
+                m_Y = rec.Y;
+                m_Width = rec.Width;
+                m_Height = rec.Height;
+            }
+            catch
+            {
+                int mx, my;
+                mx = my = 0;
+
+                Item.Measure(Item.GetBitmap(this.m_ItemID), out this.m_X, out this.m_Y, out mx, out my);
+
+                this.m_Width = mx - this.m_X;
+                this.m_Height = my - this.m_Y;
+            }
         }
 
         public Type Type
@@ -96,6 +110,9 @@ namespace Server
                 return this.m_Points;
             }
         }
+
+        public bool QuestItem { get { return m_QuestItem; } }
+
         public virtual bool Validate(PlayerMobile from, Item item)
         {
             return true;
