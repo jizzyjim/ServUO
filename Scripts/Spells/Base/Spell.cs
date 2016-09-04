@@ -847,10 +847,13 @@ namespace Server.Spells
 
 			// Lower Mana Cost = 40%
 			int lmc = AosAttributes.GetValue(m_Caster, AosAttribute.LowerManaCost);
+
 			if (lmc > 40)
 			{
 				lmc = 40;
 			}
+
+            lmc += BaseArmor.GetInherentLowerManaCost(m_Caster);
 
 			scalar -= (double)lmc / 100;
 
@@ -936,6 +939,11 @@ namespace Server.Spells
 			{
 				fc = fcMax;
 			}
+
+            if (ProtectionSpell.Registry.ContainsKey(m_Caster) /*|| EodonianPotion.IsUnderEffects(m, PotionEffect.Urali)*/)
+            {
+                fc = Math.Min(fcMax - 2, fc - 2);
+            }
 
 			TimeSpan baseDelay = CastDelayBase;
 

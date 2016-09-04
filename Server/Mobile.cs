@@ -1134,17 +1134,13 @@ namespace Server
 
 			BaseGuild guild = m_Guild;
 
-			if (guild != null && (m_Player || m_DisplayGuildTitle))
-			{
-				if (suffix.Length > 0)
-				{
-					suffix = String.Format("{0} [{1}]", suffix, Utility.FixHtml(guild.Abbreviation));
-				}
-				else
-				{
-					suffix = String.Format("[{0}]", Utility.FixHtml(guild.Abbreviation));
-				}
-			}
+            if (guild != null && m_Player && m_DisplayGuildTitle)
+            {
+                if (suffix.Length > 0)
+                    suffix = String.Format("{0} [{1}]", suffix, Utility.FixHtml(guild.Abbreviation));
+                else
+                    suffix = String.Format("[{0}]", Utility.FixHtml(guild.Abbreviation));
+            }
 
 			suffix = ApplyNameSuffix(suffix);
 
@@ -6579,11 +6575,6 @@ namespace Server
 			if (CanPaperdollBeOpenedBy(from))
 			{
 				list.Add(new PaperdollEntry(this));
-			}
-
-			if (from == this && Backpack != null && CanSee(Backpack) && CheckAlive(false))
-			{
-				list.Add(new OpenBackpackEntry(this));
 			}
 		}
 

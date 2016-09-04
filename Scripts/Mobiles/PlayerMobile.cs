@@ -41,6 +41,7 @@ using Server.Spells.Seventh;
 using Server.Spells.Sixth;
 using Server.Spells.Spellweaving;
 using Server.Targeting;
+using System.Linq;
 
 using RankDefinition = Server.Guilds.RankDefinition;
 #endregion
@@ -755,23 +756,18 @@ namespace Server.Mobiles
 			}
 		}
 
-		private static void CheckPets()
-		{
-			foreach (Mobile m in World.Mobiles.Values)
-			{
-				if (m is PlayerMobile)
-				{
-					PlayerMobile pm = (PlayerMobile)m;
-
-					if (((!pm.Mounted || (pm.Mount != null && pm.Mount is EtherealMount)) &&
-						 (pm.AllFollowers.Count > pm.AutoStabled.Count)) ||
-						(pm.Mounted && (pm.AllFollowers.Count > (pm.AutoStabled.Count + 1))))
-					{
-						pm.AutoStablePets(); /* autostable checks summons, et al: no need here */
-					}
-				}
-			}
-		}
+        private static void CheckPets()
+        {
+            foreach (PlayerMobile pm in World.Mobiles.Values.OfType<PlayerMobile>())
+            {
+                if (((!pm.Mounted || (pm.Mount != null && pm.Mount is EtherealMount)) &&
+                     (pm.AllFollowers.Count > pm.AutoStabled.Count)) ||
+                    (pm.Mounted && (pm.AllFollowers.Count > (pm.AutoStabled.Count + 1))))
+                {
+                    pm.AutoStablePets(); /* autostable checks summons, et al: no need here */
+                }
+            }
+        }
 
 		public override void OnSkillInvalidated(Skill skill)
 		{
@@ -786,30 +782,22 @@ namespace Server.Mobiles
             {
                 return 100;
             }
- 
-            int max = base.GetMaxResistance(type);
-            
-            #region Stygian Abyss
-            int stoneformOffset = 0;
-            if (Core.SA)
-            {
-                stoneformOffset = Spells.Mystic.StoneFormSpell.GetMaxResistMod(this);
-                max += BaseArmor.GetRefinedResist(this, type);
-            }
 
-            if (type != ResistanceType.Physical && 60 < max && CurseSpell.UnderEffect(this))
-            {
-                max = 60;
-                stoneformOffset = 0;
-            }
+            int max = base.GetMaxResistance(type);
+
+            #region SA
+            max += Spells.Mystic.StoneFormSpell.GetMaxResistMod(this);
             #endregion
 
-            if (Core.ML && Race == Race.Elf && type == ResistanceType.Energy)
-            {
+            max += BaseArmor.GetRefinedResist(this, type);
+
+            if (type != ResistanceType.Physical && 60 < max && Spells.Fourth.CurseSpell.UnderEffect(this))
+                max = 60;
+
+            if (Core.ML && this.Race == Race.Elf && type == ResistanceType.Energy)
                 max += 5; //Intended to go after the 60 max from curse
-            }
- 
-            return Math.Max(MinPlayerResistance + stoneformOffset, Math.Max(MaxPlayerResistance + stoneformOffset, max + stoneformOffset));
+
+            return max;
         }
 
 		protected override void OnRaceChange(Race oldRace)
@@ -1261,11 +1249,6 @@ namespace Server.Mobiles
 
 		private static void OnLogout(LogoutEventArgs e)
 		{
-			if (e.Mobile is PlayerMobile)
-			{
-				((PlayerMobile)e.Mobile).AutoStablePets();
-			}
-
 			#region Scroll of Alacrity
 			if (((PlayerMobile)e.Mobile).AcceleratedStart > DateTime.UtcNow)
 			{
@@ -1357,6 +1340,8 @@ namespace Server.Mobiles
 
 				pm.m_SpeechLog = null;
 				pm.LastOnline = DateTime.UtcNow;
+
+                pm.AutoStablePets();
 			}
 
 			DisguiseTimers.StopTimer(from);
@@ -1802,15 +1787,45 @@ namespace Server.Mobiles
 
 			if (from == this)
 			{
-				if (m_Quest != null)
-				{
-					m_Quest.GetContextMenuEntries(list);
-				}
+                if (Core.HS && Alive)
+                {
+                    list.Add(new Server.Engines.VendorSearhing.SearchVendors(this));
+                }
+
+                if (Core.SA)
+                {
+                    list.Add(new TitlesMenuEntry(this));
+
+                    if (Alive)
+                        QuestHelper.GetContextMenuEntries(list);
+                }
+                else if (Core.ML)
+                {
+                    #region Mondains Legacy
+                    if (Alive)
+                    {
+                        QuestHelper.GetContextMenuEntries(list);
+
+                        if (m_CollectionTitles.Count > 0)
+                            list.Add(new CallbackEntry(6229, new ContextCallback(ShowChangeTitle)));
+                    }
+                    #endregion
+                }
+
+                if (m_Quest != null)
+                {
+                    m_Quest.GetContextMenuEntries(list);
+                }
 
 			    if (Alive && Core.SA)
 			    {
                     list.Add(new Server.Engines.Points.LoyaltyRating(this));
 			    }
+
+                if (Backpack != null && CanSee(Backpack) && Alive)
+                {
+                    list.Add(new OpenBackpackEntry(this));
+                }
 
 				if (Alive && InsuranceEnabled)
 				{
@@ -1853,22 +1868,10 @@ namespace Server.Mobiles
                 if (r is Server.Engines.VoidPool.VoidPoolRegion && ((Server.Engines.VoidPool.VoidPoolRegion)r).Controller != null)
                     list.Add(new Server.Engines.Points.VoidPoolInfo(this));
 
-				if (Alive)
+				if (!Core.SA && Alive)
 				{
 					list.Add(new CallbackEntry(6210, ToggleChampionTitleDisplay));
 				}
-
-				#region Mondain's Legacy
-				if (Alive)
-				{
-					QuestHelper.GetContextMenuEntries(list);
-
-					if (m_CollectionTitles.Count > 0)
-					{
-						list.Add(new CallbackEntry(6229, ShowChangeTitle));
-					}
-				}
-				#endregion
 			}
 			else
 			{
@@ -3671,8 +3674,20 @@ namespace Server.Mobiles
 
 			switch (version)
 			{
-                case 30:
-                    goto case 29;
+                case 32:
+                case 31:
+                    {
+                        m_ShowGuildAbbreviation = version > 31 ? reader.ReadBool() : false;
+                        m_FameKarmaTitle = reader.ReadString();
+                        m_PaperdollSkillTitle = reader.ReadString();
+                        m_OverheadSkillTitle = reader.ReadString();
+                        m_SubtitleSkillTitle = reader.ReadString();
+
+                        m_CurrentChampTitle = reader.ReadString();
+                        m_CurrentVeteranTitle = reader.ReadInt();
+                        goto case 30;
+                    }
+                case 30: goto case 29;
 				case 29:
 					{
 						m_GauntletPoints = reader.ReadDouble();
@@ -4084,7 +4099,16 @@ namespace Server.Mobiles
 
 			base.Serialize(writer);
 
-			writer.Write(30); // version
+			writer.Write(32); // version
+
+            // Version 31/32 Titles
+            writer.Write(m_ShowGuildAbbreviation);
+            writer.Write(m_FameKarmaTitle);
+            writer.Write(m_PaperdollSkillTitle);
+            writer.Write(m_OverheadSkillTitle);
+            writer.Write(m_SubtitleSkillTitle);
+            writer.Write(m_CurrentChampTitle);
+            writer.Write(m_CurrentVeteranTitle);
 
             // Version 30 open to take out old Queens Loyalty Info
 
@@ -4097,14 +4121,6 @@ namespace Server.Mobiles
 			writer.Write(m_SSSeedLocation);
 			writer.Write(m_SSSeedMap);
 			#endregion
-
-			/*#region QueensLoyaltySystem
-			writer.Write((long)0); // Old m_LevelExp
-            writer.Write(m_Exp);
-			writer.Write(0); // Old m_Level
-
-            writer.Write(""); // Old m_ExpTitle
-            #endregion*/
 
             writer.Write(m_VASTotalMonsterFame);
 
@@ -4379,24 +4395,6 @@ namespace Server.Mobiles
 
 		public static event PlayerPropertiesEventHandler PlayerProperties;
 
-		public override void AddNameProperties(ObjectPropertyList list)
-		{
-			base.AddNameProperties(list);
-
-			XmlPoints a = (XmlPoints)XmlAttach.FindAttachment(this, typeof(XmlPoints));
-
-			XmlData XmlPointsTitle = (XmlData)XmlAttach.FindAttachment(this, typeof(XmlData), "XmlPointsTitle");
-
-			if ((XmlPointsTitle != null && XmlPointsTitle.Data == "True") || a == null)
-			{
-				return;
-			}
-			else if (IsPlayer())
-			{
-				list.Add(1070722, "Kills {0} / Deaths {1} : Rank={2}", a.Kills, a.Deaths, a.Rank);
-			}
-		}
-
 		public class PlayerPropertiesEventArgs : EventArgs
 		{
 			public PlayerMobile Player = null;
@@ -4413,8 +4411,17 @@ namespace Server.Mobiles
 		{
 			base.GetProperties(list);
 
-			#region Mondain's Legacy
-			if (m_CollectionTitles != null && m_SelectedTitle > -1)
+            if (Core.SA)
+            {
+                if (m_SubtitleSkillTitle != null)
+                    list.Add(1042971, m_SubtitleSkillTitle);
+
+                if (m_CurrentVeteranTitle > 0)
+                    list.Add(m_CurrentVeteranTitle);
+            }
+
+			#region Mondain's Legacy Titles
+			if (Core.ML && m_CollectionTitles != null && m_SelectedTitle > -1)
 			{
 				if (m_SelectedTitle < m_CollectionTitles.Count)
 				{
@@ -4424,7 +4431,7 @@ namespace Server.Mobiles
 					}
 					else if (m_CollectionTitles[m_SelectedTitle] is string)
 					{
-						list.Add(1049644, (string)m_CollectionTitles[m_SelectedTitle]);
+                        list.Add(1070722, (string)m_CollectionTitles[m_SelectedTitle]);
 					}
 				}
 			}
@@ -4759,6 +4766,26 @@ namespace Server.Mobiles
 
 		public List<object> CollectionTitles { get { return m_CollectionTitles; } }
 
+        public int SelectedTitle { get { return m_SelectedTitle; } }
+
+        public bool RemoveCollectionTitle(object o, bool silent)
+        {
+            if (m_CollectionTitles.Contains(o))
+            {
+                int i = m_CollectionTitles.IndexOf(o);
+
+                if (i == m_SelectedTitle)
+                    SelectCollectionTitle(-1, silent);
+                else if (i > m_SelectedTitle)
+                    SelectCollectionTitle(m_SelectedTitle - 1, silent);
+
+                m_CollectionTitles.Remove(o);
+
+                return true;
+            }
+            return false;
+        }
+
 		public int GetCollectionPoints(Collection collection)
 		{
 			if (m_Collections == null)
@@ -4793,34 +4820,34 @@ namespace Server.Mobiles
 			}
 		}
 
-		public void SelectCollectionTitle(int num)
+		public void SelectCollectionTitle(int num, bool silent = false)
 		{
 			if (num == -1)
 			{
 				m_SelectedTitle = num;
-				SendLocalizedMessage(1074010); // You elect to hide your Reward Title.
+                if (!silent) SendLocalizedMessage(1074010); // You elect to hide your Reward Title.
 			}
-			else if (num < m_CollectionTitles.Count && num >= -1)
-			{
-				if (m_SelectedTitle != num)
-				{
-					m_SelectedTitle = num;
+            else if (num < m_CollectionTitles.Count && num >= -1)
+            {
+                if (m_SelectedTitle != num)
+                {
+                    m_SelectedTitle = num;
 
-					if (m_CollectionTitles[num] is int)
-					{
-						SendLocalizedMessage(1074008, "#" + (int)m_CollectionTitles[num]);
-						// You change your Reward Title to "~1_TITLE~".	
-					}
-					else if (m_CollectionTitles[num] is string)
-					{
-						SendLocalizedMessage(1074008, (string)m_CollectionTitles[num]); // You change your Reward Title to "~1_TITLE~".	
-					}
-				}
-				else
-				{
-					SendLocalizedMessage(1074009); // You decide to leave your title as it is.
-				}
-			}
+                    if (m_CollectionTitles[num] is int && !silent)
+                    {
+                        SendLocalizedMessage(1074008, "#" + (int)m_CollectionTitles[num]);
+                        // You change your Reward Title to "~1_TITLE~".	
+                    }
+                    else if (m_CollectionTitles[num] is string && !silent)
+                    {
+                        SendLocalizedMessage(1074008, (string)m_CollectionTitles[num]); // You change your Reward Title to "~1_TITLE~".	
+                    }
+                }
+                else if (!silent)
+                {
+                    SendLocalizedMessage(1074009); // You decide to leave your title as it is.
+                }
+            }
 
 			InvalidateProperties();
 		}
@@ -4848,6 +4875,142 @@ namespace Server.Mobiles
 			SendGump(new SelectTitleGump(this, m_SelectedTitle));
 		}
 		#endregion
+
+        #region Titles
+        private string m_FameKarmaTitle;
+        private string m_PaperdollSkillTitle;
+        private string m_SubtitleSkillTitle;
+        private string m_CurrentChampTitle;
+        private string m_OverheadSkillTitle;
+        private int m_CurrentVeteranTitle;
+        private bool m_ShowGuildAbbreviation;
+
+        public string FameKarmaTitle
+        {
+            get { return m_FameKarmaTitle; }
+            set { m_FameKarmaTitle = value; InvalidateProperties(); }
+        }
+
+        public string PaperdollSkillTitle
+        {
+            get { return m_PaperdollSkillTitle; }
+            set { m_PaperdollSkillTitle = value; InvalidateProperties(); }
+        }
+
+        public string SubtitleSkillTitle
+        {
+            get { return m_SubtitleSkillTitle; }
+            set { m_SubtitleSkillTitle = value; InvalidateProperties(); }
+        }
+
+        public string CurrentChampTitle
+        {
+            get { return m_CurrentChampTitle; }
+            set { m_CurrentChampTitle = value; InvalidateProperties(); }
+        }
+
+        public string OverheadSkillTitle
+        {
+            get { return m_OverheadSkillTitle; }
+            set { m_OverheadSkillTitle = value; InvalidateProperties(); }
+        }
+
+        public int CurrentVeteranTitle
+        {
+            get { return m_CurrentVeteranTitle; }
+            set { m_CurrentVeteranTitle = value; InvalidateProperties(); }
+        }
+
+        public bool ShowGuildAbbreviation
+        {
+            get { return m_ShowGuildAbbreviation; }
+            set { m_ShowGuildAbbreviation = value; InvalidateProperties(); }
+        }
+
+        public override void AddNameProperties(ObjectPropertyList list)
+        {
+            if (!Core.SA)
+            {
+                base.AddNameProperties(list);
+
+                XmlPoints a = (XmlPoints)XmlAttach.FindAttachment(this, typeof(XmlPoints));
+
+                XmlData XmlPointsTitle = (XmlData)XmlAttach.FindAttachment(this, typeof(XmlData), "XmlPointsTitle");
+
+                if ((XmlPointsTitle != null && XmlPointsTitle.Data == "True") || a == null)
+                {
+                    return;
+                }
+                else if (IsPlayer())
+                {
+                    list.Add(1070722, "Kills {0} / Deaths {1} : Rank={2}", a.Kills, a.Deaths, a.Rank);
+                }
+
+                return;
+            }
+
+            string name = Name;
+
+            if (name == null)
+            {
+                name = String.Empty;
+            }
+
+            string prefix = "";
+
+            if (ShowFameTitle && Fame >= 10000)
+            {
+                prefix = Female ? "Lady" : "Lord";
+            }
+
+            string suffix = "";
+
+            if (PropertyTitle && Title != null && Title.Length > 0)
+            {
+                suffix = Title;
+            }
+
+            BaseGuild guild = Guild;
+
+            if (m_OverheadSkillTitle != null)
+            {
+                if (suffix.Length > 0)
+                    suffix = String.Format("{0} {1}", suffix, m_OverheadSkillTitle);
+                else
+                    suffix = String.Format("{0}", m_OverheadSkillTitle);
+            }
+            else if (guild != null && m_ShowGuildAbbreviation)
+            {
+                if (suffix.Length > 0)
+                    suffix = String.Format("{0} [{1}]", suffix, Utility.FixHtml(guild.Abbreviation));
+                else
+                    suffix = String.Format("[{0}]", Utility.FixHtml(guild.Abbreviation));
+            }
+
+            suffix = ApplyNameSuffix(suffix);
+
+            list.Add(1050045, "{0} \t{1}\t {2}", prefix, name, suffix); // ~1_PREFIX~~2_NAME~~3_SUFFIX~
+
+            if (guild != null && DisplayGuildTitle)
+            {
+                string title = GuildTitle;
+
+                if (title == null)
+                {
+                    title = "";
+                }
+                else
+                {
+                    title = title.Trim();
+                }
+
+                if (title.Length > 0)
+                {
+                    list.Add("{0}, {1}", Utility.FixHtml(title), Utility.FixHtml(guild.Name));
+                }
+            }
+        }
+        #endregion
 
 		#region MyRunUO Invalidation
 		private bool m_ChangedMyRunUO;
@@ -5760,6 +5923,23 @@ namespace Server.Mobiles
 
 				t.m_Harrower = Math.Max(count, t.m_Harrower); //Harrower titles never decay.
 			}
+
+            public bool HasChampionTitle(PlayerMobile pm)
+            {
+                if (m_Harrower > 0)
+                    return true;
+
+                if (m_Values == null)
+                    return false;
+
+                foreach (TitleInfo info in m_Values)
+                {
+                    if (info.Value > 300)
+                        return true;
+                }
+
+                return false;
+            }
 		}
 		#endregion
 
@@ -5909,73 +6089,6 @@ namespace Server.Mobiles
 		}
 		#endregion
 
-		#region XML PVP Dismount Pet
-		public void DismountAndStable()
-		{
-			BaseCreature bc = Mount as BaseCreature;
-
-			if (Mount != null)
-			{
-				Mount.Rider = null;
-			}
-
-			if (bc != null)
-			{
-				bc.ControlTarget = null;
-				bc.ControlOrder = OrderType.Stay;
-				bc.Internalize();
-				bc.SetControlMaster(null);
-				bc.SummonMaster = null;
-				bc.IsStabled = true;
-
-				Stabled.Add(bc);
-				m_AutoStabled.Add(bc);
-
-				SendMessage("Your Mount has been Stabled !.");
-			}
-		}
-
-		public void RetrivePet()
-		{
-			if (m_AutoStabled.Count < 1)
-			{
-				return;
-			}
-
-			for (int k = 0; k < m_AutoStabled.Count; ++k)
-			{
-				BaseCreature bc = (BaseCreature)m_AutoStabled[k];
-
-				if (Stabled.Contains(bc))
-				{
-					bc.ControlTarget = null;
-					bc.ControlOrder = OrderType.Follow;
-					bc.SetControlMaster(this);
-					bc.SummonMaster = null;
-
-					if (bc.Summoned)
-					{
-						bc.SummonMaster = this;
-					}
-
-					bc.Loyalty = BaseCreature.MaxLoyalty; // Wonderfully happy
-
-					bc.MoveToWorld(Location, Map);
-
-					bc.IsStabled = false;
-
-					if (m_AutoStabled.Contains(bc))
-					{
-						m_AutoStabled.Remove(bc);
-					}
-
-					SendMessage("Your Mount return to You !.");
-				}
-			}
-			m_AutoStabled.Clear();
-		}
-		#endregion
-
 		public void AutoStablePets()
 		{
 			if (Core.SE && AllFollowers.Count > 0)
@@ -6025,7 +6138,7 @@ namespace Server.Mobiles
 					pet.IsStabled = true;
 					pet.StabledBy = this;
 
-					pet.Loyalty = BaseCreature.MaxLoyalty; // Wonderfully happy
+					//pet.Loyalty = BaseCreature.MaxLoyalty; // Wonderfully happy
 
 					Stabled.Add(pet);
 					m_AutoStabled.Add(pet);
@@ -6081,7 +6194,7 @@ namespace Server.Mobiles
 					pet.IsStabled = false;
 					pet.StabledBy = null;
 
-					pet.Loyalty = BaseCreature.MaxLoyalty; // Wonderfully Happy
+					//pet.Loyalty = BaseCreature.MaxLoyalty; // Wonderfully Happy
 
 					if (Stabled.Contains(pet))
 					{
