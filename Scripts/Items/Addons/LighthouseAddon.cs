@@ -139,7 +139,7 @@ namespace Server.Items
 
             house.DropToMovingCrate(model);
 
-            boat.OnDryDock();
+            boat.OnDryDock(null);
 
             boat.Refresh();
             boat.Internalize();
@@ -212,6 +212,7 @@ namespace Server.Items
         public LighthouseAddonDeed(string account)
         {
             Account = account;
+            this.LootType = LootType.Blessed;
         }
 
         public override void OnDoubleClick(Mobile from)

@@ -98,7 +98,6 @@ namespace Server.SkillHandlers
 
         public static bool OnBeforeImbue(Mobile from, Item item, int mod, int value, int totalprops, int maxprops, int totalitemweight, int maxweight)
         {
-         
             if (totalprops >= maxprops || totalitemweight > maxweight)
             {
                 from.SendLocalizedMessage(1079772); // You cannot imbue this item with any more item properties.
@@ -126,11 +125,11 @@ namespace Server.SkillHandlers
                 if (message)
                     from.SendLocalizedMessage(1080427);  // You cannot magically unravel an item that is currently enchanted.
             }
-            //else if (item is BaseWeapon && ((BaseWeapon)item).FocusWeilder != null)
-            //{
-            //    if (message)
-            //        from.SendLocalizedMessage(1080445); //You cannot magically unravel an item that is under the effects of the ninjitsu focus attack ability.
-            //}
+            else if (item is BaseWeapon && ((BaseWeapon)item).FocusWeilder != null)
+            {
+                if (message)
+                    from.SendLocalizedMessage(1080445); //You cannot magically unravel an item that is under the effects of the ninjitsu focus attack ability.
+            }
             else if (item is IFactionItem && ((IFactionItem)item).FactionItemState != null)
             {
                 if (message)
@@ -305,10 +304,9 @@ namespace Server.SkillHandlers
 
                 int totalItemWeight = GetTotalWeight(i, mod);
                 int totalItemMods = GetTotalMods(i, mod);
+                int maxint = GetMaxIntensity(i, def);
 
-                double propWeight = ((double)def.Weight / (double)def.MaxIntensity) * value;
-                propWeight = Math.Round(propWeight);
-                int propweight = Convert.ToInt32(propWeight);
+                int propweight = (int)(((double)def.Weight / (double)maxint) * value);
 
                 if ((totalItemWeight + propweight) > maxWeight)
                 {
@@ -440,6 +438,9 @@ namespace Server.SkillHandlers
                         BaseArmor arm = i as BaseArmor;
                         arm.ArmorAttributes.SelfRepair = 0;
 
+                        if (prop is AosWeaponAttribute && (AosWeaponAttribute)prop == AosWeaponAttribute.DurabilityBonus)
+                            prop = AosArmorAttribute.DurabilityBonus;
+
                         if (prop is AosAttribute)
                         {
                             AosAttribute attr = (AosAttribute)prop;
@@ -479,6 +480,9 @@ namespace Server.SkillHandlers
                     {
                         BaseShield shield = i as BaseShield;
                         shield.ArmorAttributes.SelfRepair = 0;
+
+                        if (prop is AosWeaponAttribute && (AosWeaponAttribute)prop == AosWeaponAttribute.DurabilityBonus)
+                            prop = AosArmorAttribute.DurabilityBonus;
 
                         if (prop is AosAttribute)
                         {
@@ -597,98 +601,144 @@ namespace Server.SkillHandlers
             }
         }
 
-        public static bool UnravelItem(Mobile from, Item item, bool message = true)
+	    public static bool UnravelItem(Mobile from, Item item, bool message = true)
+	    {
+		    int weight = GetTotalWeight(item);
+			
+		    if (weight <= 0)
+			{
+				if (message)
+				{
+					// You cannot magically unravel this item. It appears to possess little or no magic.
+					from.SendLocalizedMessage(1080437);
+				}
+
+				return false;
+		    }
+
+		    ImbuingContext context = GetContext(from);
+
+		    int bonus = context.Imbue_SFBonus;
+			
+		    Type resType = null;
+		    var resAmount = Math.Max(1, weight / 100);
+
+			var success = false;
+
+		    if (weight >= 480 - bonus)
+			{
+				if (from.Skills[SkillName.Imbuing].Value < 95.0)
+				{
+					if (message)
+					{
+						// Your Imbuing skill is not high enough to magically unravel this item.
+						from.SendLocalizedMessage(1080434);
+					}
+
+					return false;
+				}
+				
+				if (from.CheckSkill(SkillName.Imbuing, 95.0, 120.0))
+				{
+					success = true;
+					resType = typeof(RelicFragment);
+					resAmount = 1;
+				}
+				else if (from.CheckSkill(SkillName.Imbuing, 45.0, 95.0))
+				{
+					success = true;
+					resType = typeof(EnchantEssence);
+					resAmount = Math.Max(1, resAmount - Utility.Random(3));
+				}
+			}
+		    else if (weight > 200 - bonus && weight < 480 - bonus)
+			{
+				if (from.Skills[SkillName.Imbuing].Value < 45.0)
+				{
+					if (message)
+					{
+						// Your Imbuing skill is not high enough to magically unravel this item.
+						from.SendLocalizedMessage(1080434);
+					}
+
+					return false;
+				}
+				
+				if (from.CheckSkill(SkillName.Imbuing, 45.0, 95.0))
+				{
+					success = true;
+					resType = typeof(EnchantEssence);
+					resAmount = Math.Max(1, resAmount);
+				}
+				else if (from.CheckSkill(SkillName.Imbuing, 0.0, 45.0))
+				{
+					success = true;
+					resType = typeof(MagicalResidue);
+					resAmount = Math.Max(1, resAmount + Utility.Random(2));
+				}
+			}
+			else if (weight <= 200 - bonus)
+			{
+				if (from.CheckSkill(SkillName.Imbuing, 0.0, 45.0))
+				{
+					success = true;
+					resType = typeof(MagicalResidue);
+					resAmount = Math.Max(1, resAmount + Utility.Random(2));
+				}
+			}
+			else
+			{
+				if (message)
+				{
+					// You cannot magically unravel this item. It appears to possess little or no magic.
+					from.SendLocalizedMessage(1080437);
+				}
+
+				return false;
+			}
+
+		    if (!success)
+		    {
+			    return false;
+		    }
+
+		    Item res;
+
+		    while (resAmount > 0)
+		    {
+			    res = Activator.CreateInstance(resType) as Item;
+
+			    if (res == null)
+			    {
+				    break;
+			    }
+
+			    if (res.Stackable)
+			    {
+				    res.Amount = Math.Max(1, Math.Min(60000, resAmount));
+			    }
+
+			    resAmount -= res.Amount;
+
+			    @from.AddToBackpack(res);
+		    }
+
+		    item.Delete();
+
+		    return true;
+	    }
+
+	    public static int GetMaxIntensity(Item item, ImbuingDefinition def)
         {
-            int weight = GetTotalWeight(item);
-
-            ImbuingContext context = Imbuing.GetContext(from);
-
-            int bonus = context.Imbue_SFBonus;
-            int unravelQTY = weight / 100 ;
-            bool success = false;
-
-            if (weight > 0)
+            if (item is BaseWeapon && def.Attribute is AosWeaponAttribute)
             {
-                // == Relic Fragment ==
-                if (weight >= (480 - bonus))
-                {
-                    if (from.Skills[SkillName.Imbuing].Base >= 95.0)
-                    {
-                        if (success = from.CheckSkill(SkillName.Imbuing, 95.0, 120.0))
-                        {
-                            item.Delete();
-                            from.AddToBackpack(new RelicFragment(unravelQTY - Utility.Random(0, 3)));
+                AosWeaponAttribute attr = (AosWeaponAttribute)def.Attribute;
 
-                        }
-                        else if (success = from.CheckSkill(SkillName.Imbuing, 45.0, 95.0))
-                        {
-                            item.Delete();
-                            from.AddToBackpack(new EnchantEssence(unravelQTY - Utility.Random(0, 3)));
-                        }
-                        else
-                        {
-                            Effects.PlaySound(from.Location, from.Map, 0x3BF);
-                            if (message)
-                                from.SendLocalizedMessage(1080428);  //You attempt to magically unravel the item, but fail.
-                        }
-                    }
-                    else
-                    {
-                        if (message)
-                            from.SendLocalizedMessage(1080434); // Your Imbuing skill is not high enough to magically unravel this item.
-                        return false;
-                    }
-                }
-                // == Enchanted Essence ==
-                else if (weight > (200 - bonus) && weight < (480 - bonus))
-                {
-                    if (from.Skills[SkillName.Imbuing].Base >= 45.0)
-                    {
-                        if (success = from.CheckSkill(SkillName.Imbuing, 45.0, 95.0))
-                        {
-                            item.Delete();
-                            from.AddToBackpack(new EnchantEssence(unravelQTY));
-                        }
-                        else if(success = from.CheckSkill(SkillName.Imbuing, 0.0, 45.0))
-                        {
-                            item.Delete();
-                            from.AddToBackpack(new MagicalResidue(unravelQTY + Utility.Random(0, 2)));
-                        }
-                        else
-                        {
-                            Effects.PlaySound(from.Location, from.Map, 0x3BF);
-                            if (message)
-                                from.SendLocalizedMessage(1080428);  //You attempt to magically unravel the item, but fail.
-                        }
-                    }
-                    else
-                    {
-                        if (message)
-                            from.SendLocalizedMessage(1080434); // Your Imbuing skill is not high enough to magically unravel this item.
-                        return false;
-                    }
-                }
-                 // == Magical Residue ==
-                else if (weight <= (200 - bonus))
-                {
-                    if (success = from.CheckSkill(SkillName.Imbuing, 0.0, 45.0))
-                    {
-                        item.Delete();
-                        from.AddToBackpack(new MagicalResidue(unravelQTY + Utility.Random(1,2)));
-                    }
-                    else
-                    {
-                        Effects.PlaySound(from.Location, from.Map, 0x3BF);
-                        if (message)
-                            from.SendLocalizedMessage(1080428);  //You attempt to magically unravel the item, but fail.
-                    }
-                }
-                     
+                if (attr == AosWeaponAttribute.HitLeechMana || attr == AosWeaponAttribute.HitLeechHits)
+                    return GetPropRange(item, attr)[1];
             }
-            else if (message)
-                from.SendLocalizedMessage(1080437); // You cannot magically unravel this item. It appears to possess little or no magic.
 
-            return success;
+            return def.MaxIntensity;
         }
 
         public static int GetMaxWeight(object itw)
@@ -1296,6 +1346,16 @@ namespace Server.SkillHandlers
         public static bool CheckSoulForge(Mobile from, int range)
         {
             return CheckSoulForge(from, range, true);
+        }
+
+        public static bool CheckQueen(Mobile from)
+        {
+            PlayerMobile pm = from as PlayerMobile;
+
+            if (pm != null && pm.Region.IsPartOf("Queen's Palace"))
+                return Server.Engines.Points.PointsSystem.QueensLoyalty.IsNoble(from);
+
+            return true;
         }
 
         public static bool CheckSoulForge(Mobile from, int range, bool message)

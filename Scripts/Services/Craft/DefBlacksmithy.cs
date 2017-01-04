@@ -383,7 +383,7 @@ namespace Server.Engines.Craft
                     typeof(StandardPlateKabuto), 1011079, 1030196, 90.0, 140.0, typeof(IronIngot), 1044036, 25, 1044037);
                 SetNeededExpansion(index, Expansion.SE);
 
-                /*if (Core.ML)
+                if (Core.ML)
                 {
                     index = AddCraft(typeof(Circlet), 1011079, 1032645, 62.1, 112.1, typeof(IronIngot), 1044036, 6, 1044037);
                     SetNeededExpansion(index, Expansion.ML);
@@ -396,7 +396,7 @@ namespace Server.Engines.Craft
                     AddRes(index, typeof(Amethyst), 1044236, 1, 1044240);
                     AddRes(index, typeof(BlueDiamond), 1032696, 1, 1044240);
                     SetNeededExpansion(index, Expansion.ML);
-                }*/
+                }
             }
             #endregion
 
@@ -933,6 +933,23 @@ namespace Server.Engines.Craft
 
             index = AddCraft(typeof(DragonChest), 1011173, 1029793, 85.0, 135.0, typeof(RedScales), 1060883, 36, 1060884);
             SetUseSubRes2(index, true);
+            #endregion
+
+			#region SA Craftables
+			index = AddCraft(typeof(CrushedGlass), 1011173, 1113351, 110.0, 135.0, typeof(BlueDiamond), 1032696, 1, 1044253);
+			AddRes(index, typeof(GlassSword), 1095371, 5, 1044253);
+			SetNeededExpansion(index, Expansion.SA);
+
+			index = AddCraft(typeof(PowderedIron), 1011173, 1113353, 110.0, 135.0, typeof(WhitePearl), 1026253, 1, 1044253);
+			AddRes(index, typeof(IronIngot), 1044036, 20, 1044037);
+			SetNeededExpansion(index, Expansion.SA);
+
+            index = this.AddCraft(typeof(ExodusSacrificalDagger), 1011173, 1153500, 95.0, 120.0, typeof(IronIngot), 1044036, 12, 1044253);
+            AddRes(index, typeof(BlueDiamond), 1032696, 2, 1044253);
+            AddRes(index, typeof(FireRuby), 1032695, 2, 1044253);
+            AddRes(index, typeof(SmallPieceofBlackrock), 1150016, 10, 1044253);
+            this.ForceNonExceptional(index);
+            this.SetNeededExpansion(index, Expansion.SA);
             #endregion
 
             // Set the overridable material

@@ -257,6 +257,8 @@ namespace Server.Mobiles
                 to.PlaySound(0x584);
 				
                 m_Table[to] = Timer.DelayCall(TimeSpan.FromSeconds(30), new TimerStateCallback(EndCacophonic_Callback), to);
+
+                BuffInfo.AddBuff(to, new BuffInfo(BuffIcon.HowlOfCacophony, 1153793, 1153820, TimeSpan.FromSeconds(30), to, "60\t5\t5"));
             }
         }
 
@@ -266,7 +268,9 @@ namespace Server.Mobiles
                 m_Table = new Hashtable();
 				
             m_Table[from] = null;
-				
+
+            BuffInfo.RemoveBuff(from, BuffIcon.HowlOfCacophony);
+
             from.Send(SpeedControl.Disable);
         }
 
@@ -299,12 +303,12 @@ namespace Server.Mobiles
                 ooze.MoveToWorld(p, this.Map);
             }
 			
-            if (this.Combatant != null)
+            if (this.Combatant is PlayerMobile)
             {
                 if (corrosive)
-                    this.Combatant.SendLocalizedMessage(1072071); // A corrosive gas seeps out of your enemy's skin!
+                    ((PlayerMobile)Combatant).SendLocalizedMessage(1072071); // A corrosive gas seeps out of your enemy's skin!
                 else
-                    this.Combatant.SendLocalizedMessage(1072072); // A poisonous gas seeps out of your enemy's skin!
+                    ((PlayerMobile)Combatant).SendLocalizedMessage(1072072); // A poisonous gas seeps out of your enemy's skin!
             }
         }
 

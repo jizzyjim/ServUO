@@ -13,6 +13,8 @@ using Server.Spells.Chivalry;
 using Server.Spells.Necromancy;
 using Server.Spells.Spellweaving;
 using Server.SkillHandlers;
+using Server.Engines.CityLoyalty;
+using Server.Spells.SkillMasteries;
 
 namespace Server
 {
@@ -31,54 +33,71 @@ namespace Server
             }
         }
 
-        public static int Damage(Mobile m, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy)
+        public static int Damage(IDamageable m, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy)
         {
             return Damage(m, null, damage, ignoreArmor, phys, fire, cold, pois, nrgy);
         }
 
-        public static int Damage(Mobile m, int damage, int phys, int fire, int cold, int pois, int nrgy)
+        public static int Damage(IDamageable m, int damage, int phys, int fire, int cold, int pois, int nrgy)
         {
             return Damage(m, null, damage, phys, fire, cold, pois, nrgy);
         }
 
-        public static int Damage(Mobile m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy)
+        public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy)
         {
             return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, 0, 0, false, false, false);
         }
 
-        public static int Damage(Mobile m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, int chaos)
+        public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, int chaos)
         {
             return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, chaos, 0, false, false, false);
         }
 
-        public static int Damage(Mobile m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct)
+        public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct)
         {
             return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, chaos, direct, false, false, false);
         }
 
-        public static int Damage(Mobile m, Mobile from, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy)
+        public static int Damage(IDamageable m, Mobile from, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy)
         {
             return Damage(m, from, damage, ignoreArmor, phys, fire, cold, pois, nrgy, 0, 0, false, false, false);
         }
 
-        public static int Damage(Mobile m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, bool keepAlive)
+        public static int Damage(IDamageable m, Mobile from, int damage, int phys, int fire, int cold, int pois, int nrgy, bool keepAlive)
         {
             return Damage(m, from, damage, false, phys, fire, cold, pois, nrgy, 0, 0, keepAlive, false, false);
         }
 
-        public static int Damage(Mobile m, Mobile from, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct, bool keepAlive, bool archer, bool deathStrike)
+        public static int Damage(IDamageable damageable, Mobile from, int damage, bool ignoreArmor, int phys, int fire, int cold, int pois, int nrgy, int chaos, int direct, bool keepAlive, bool archer, bool deathStrike)
         {
-            if (m == null || m.Deleted || !m.Alive || damage <= 0)
+            Mobile m = damageable as Mobile;
+
+            if (damageable == null || damageable.Deleted || !damageable.Alive || damage <= 0)
                 return 0;
 
-            if (phys == 0 && fire == 100 && cold == 0 && pois == 0 && nrgy == 0)
+            if (m != null && phys == 0 && fire == 100 && cold == 0 && pois == 0 && nrgy == 0)
                 Mobiles.MeerMage.StopEffect(m, true);
 
             if (!Core.AOS)
             {
-                m.Damage(damage, from);
+                if(m != null)
+                    m.Damage(damage, from);
+
                 return damage;
             }
+
+            #region Mondain's Legacy
+            if (m != null)
+            {
+                m.Items.ForEach(i =>
+                {
+                    ITalismanProtection prot = i as ITalismanProtection;
+
+                    if (prot != null)
+                        damage = prot.Protection.ScaleDamage(from, damage);
+                });
+            }
+            #endregion
 
             Fix(ref phys);
             Fix(ref fire);
@@ -119,23 +138,14 @@ namespace Server
 
             if (!ignoreArmor)
             {
-                // Armor Ignore on OSI ignores all defenses, not just physical.
-                int resPhys = m.PhysicalResistance;
-
-                #region SA
-                int physDamage = damage * phys * (100 - m.PhysicalResistance);
-                int fireDamage = damage * fire * (100 - m.FireResistance);
-                int coldDamage = damage * cold * (100 - m.ColdResistance);
-                int poisonDamage = damage * pois * (100 - m.PoisonResistance);
-                int energyDamage = damage * nrgy * (100 - m.EnergyResistance);
-
-                int[] amounts = new int[] { physDamage, fireDamage, coldDamage, poisonDamage, energyDamage };
+                int physDamage = damage * phys * (100 - damageable.PhysicalResistance);
+                int fireDamage = damage * fire * (100 - damageable.FireResistance);
+                int coldDamage = damage * cold * (100 - damageable.ColdResistance);
+                int poisonDamage = damage * pois * (100 - damageable.PoisonResistance);
+                int energyDamage = damage * nrgy * (100 - damageable.EnergyResistance);
 
                 totalDamage = physDamage + fireDamage + coldDamage + poisonDamage + energyDamage;
                 totalDamage /= 10000;
-
-                
-                #endregion
 
                 if (Core.ML)
                 {
@@ -145,7 +155,8 @@ namespace Server
                         totalDamage += totalDamage * quiver.DamageIncrease / 100;
                 }
 
-                BaseFishPie.ScaleDamage(m, ref totalDamage, phys, fire, cold, pois, nrgy, direct);
+                if (m != null)
+                    BaseFishPie.ScaleDamage(m, ref totalDamage, phys, fire, cold, pois, nrgy, direct);
 
                 if (totalDamage < 1)
                     totalDamage = 1;
@@ -167,6 +178,48 @@ namespace Server
                 if (Core.ML && quiver != null)
                     totalDamage += totalDamage * quiver.DamageIncrease / 100;
             }
+
+            // object being damaged is not a mobile, so we will end here
+            if (m == null)
+            {
+                damageable.Damage(totalDamage, from);
+                return totalDamage;
+            }
+
+            #region Evil Omen and Blood Oath
+            if (EvilOmenSpell.TryEndEffect(m))
+            {
+                totalDamage = (int)(totalDamage * 1.25);
+            }
+
+            if (from != null)
+            {
+                Mobile oath = BloodOathSpell.GetBloodOath(from);
+
+                /* Per EA's UO Herald Pub48 (ML):
+                * ((resist spellsx10)/20 + 10=percentage of damage resisted)
+                */
+
+                if (oath == m)
+                {
+                    totalDamage = (int)(totalDamage * 1.1);
+
+                    if (totalDamage > 35 && from is PlayerMobile) /* capped @ 35, seems no expansion */
+                    {
+                        totalDamage = 35;
+                    }
+
+                    if (Core.ML)
+                    {
+                        from.Damage((int)(totalDamage * (1 - (((from.Skills.MagicResist.Value * .5) + 10) / 100))), m);
+                    }
+                    else
+                    {
+                        from.Damage(totalDamage, m);
+                    }
+                }
+            }
+            #endregion
 
             #region Dragon Barding
             if ((from == null || !from.Player) && m.Player && m.Mount is SwampDragon)
@@ -204,7 +257,7 @@ namespace Server
 
             if(totalDamage > 0)
                 Spells.Mystic.SpellPlagueSpell.OnMobileDamaged(m);
-            #endregion 
+            #endregion
 
             if (keepAlive && totalDamage > m.Hits)
                 totalDamage = m.Hits;
@@ -227,6 +280,10 @@ namespace Server
                     }
                 }
             }
+
+            #region Berserk
+            BestialSetHelper.OnDamage(m, from, ref totalDamage);
+            #endregion
 
             m.Damage(totalDamage, from, true, false);
 
@@ -273,12 +330,12 @@ namespace Server
                 case 11: return AosAttributes.GetValue(from, AosAttribute.SpellDamage);
                 case 12: return Math.Min(6, AosAttributes.GetValue(from, AosAttribute.CastRecovery));
                 case 13:
-                    int max = from.Skills[SkillName.Chivalry].Value < 70.0 ? 4 : 2;
-                    if (ProtectionSpell.Registry.ContainsKey(from) /*|| EodonianPotion.IsUnderEffects(m, PotionEffect.Urali)*/)
+                    /*int max = from.Skills[SkillName.Chivalry].Value < 70.0 ? 4 : 2;
+                    if (ProtectionSpell.Registry.ContainsKey(from) || EodonianPotion.IsUnderEffects(from, PotionEffect.Urali))
                     {
                         return Math.Min(max - 2, AosAttributes.GetValue(from, AosAttribute.CastSpeed) - 2);
-                    }
-                    return Math.Min(max, AosAttributes.GetValue(from, AosAttribute.CastSpeed));
+                    }*/
+                    return AosAttributes.GetValue(from, AosAttribute.CastSpeed);
                 case 14: return Math.Min(40, AosAttributes.GetValue(from, AosAttribute.LowerManaCost)) + BaseArmor.GetInherentLowerManaCost(from);
 				default: return 0;
 			}
@@ -390,6 +447,13 @@ namespace Server
                     if (attrs != null)
                         value += attrs[attribute];
                 }
+                else if (obj is FishingPole)
+                {
+                    AosAttributes attrs = ((FishingPole)obj).Attributes;
+
+                    if (attrs != null)
+                        value += attrs[attribute];
+                }
                 else if (obj is BaseQuiver)
                 {
                     AosAttributes attrs = ((BaseQuiver)obj).Attributes;
@@ -417,6 +481,11 @@ namespace Server
             }
 
             #region Malus/Buff Handler
+
+            #region Skill Mastery
+            value += SkillMasterySpell.GetAttributeBonus(m, attribute);
+            #endregion
+
             if (attribute == AosAttribute.WeaponDamage)
             {
                 if (BaseMagicalFood.IsUnderInfluence(m, MagicalFood.WrathGrapes))
@@ -424,7 +493,7 @@ namespace Server
 
                 // attacker gets 10% bonus when they're under divine fury
                 if (DivineFurySpell.UnderEffect(m))
-                    value += 10;
+                    value += m.Skills[SkillName.Chivalry].Value >= 120.0 && m.Karma >= 10000 ? 20 : 10;
 
                 // Horrific Beast transformation gives a +25% bonus to damage.
                 if (TransformationSpellHelper.UnderTransformation(m, typeof(HorrificBeastSpell)))
@@ -444,6 +513,11 @@ namespace Server
                 #region SA
                 if (TransformationSpellHelper.UnderTransformation(m, typeof(Spells.Mystic.StoneFormSpell)))
                     value -= 10;
+
+                if (m is PlayerMobile && m.Race == Race.Gargoyle)
+                {
+                    value += ((PlayerMobile)m).GetRacialBerserkBuff(false);
+                }
                 #endregion
 
                 #region High Seas
@@ -464,6 +538,18 @@ namespace Server
                 if (context != null && context.Spell is ReaperFormSpell)
                     value += ((ReaperFormSpell)context.Spell).SpellDamageBonus;
 
+                #region SA
+                if (m is PlayerMobile && m.Race == Race.Gargoyle)
+                {
+                    value += ((PlayerMobile)m).GetRacialBerserkBuff(true);
+                }
+                #endregion
+
+                #region City Loyalty
+                if (CityLoyaltySystem.HasTradeDeal(m, TradeDeal.GuildOfArcaneArts))
+                    value += 5;
+                #endregion
+
                 #region High Seas
                 if (BaseFishPie.IsUnderEffects(m, FishPieEffect.SpellDamage))
                     value += 5;
@@ -476,6 +562,11 @@ namespace Server
 
                 if (EssenceOfWindSpell.IsDebuffed(m))
                     value -= EssenceOfWindSpell.GetFCMalus(m);
+
+                #region City Loyalty
+                if (CityLoyaltySystem.HasTradeDeal(m, TradeDeal.BardicCollegium))
+                    value += 1;
+                #endregion
 
                 #region SA
                 if (Spells.Mystic.SleepSpell.IsUnderSleepEffects(m))
@@ -502,8 +593,8 @@ namespace Server
                 if (MonstrousInterredGrizzle.UnderCacophonicAttack(m) || LadyMelisande.UnderPutridNausea(m))
                     value -= 60;
 
-                if (Spells.Chivalry.DivineFurySpell.UnderEffect(m))
-                    value += 10;
+                if (DivineFurySpell.UnderEffect(m))
+                    value += m.Skills[SkillName.Chivalry].Value >= 120.0 && m.Karma >= 10000 ? 15 : 10;
 
                 value += HonorableExecution.GetSwingBonus(m);
 
@@ -524,6 +615,11 @@ namespace Server
                 if (EssenceOfWindSpell.IsDebuffed(m))
                     value -= EssenceOfWindSpell.GetSSIMalus(m);
 
+                #region City Loyalty
+                if (CityLoyaltySystem.HasTradeDeal(m, TradeDeal.GuildOfAssassins))
+                    value += 5;
+                #endregion
+
                 #region SA
                 if (Spells.Mystic.SleepSpell.IsUnderSleepEffects(m))
                     value -= 45;
@@ -540,8 +636,8 @@ namespace Server
                 if (LadyMelisande.UnderPutridNausea(m))
                     value -= 60;
 
-                if (Spells.Chivalry.DivineFurySpell.UnderEffect(m))
-                    value += 10; // attacker gets 10% bonus when they're under divine fury
+                if (DivineFurySpell.UnderEffect(m))
+                    value += m.Skills[SkillName.Chivalry].Value >= 120.0 && m.Karma >= 10000 ? 15 : 10;                    
 
                 if (BaseWeapon.CheckAnimal(m, typeof(GreyWolf)) || BaseWeapon.CheckAnimal(m, typeof(BakeKitsune)))
                     value += 20; // attacker gets 20% bonus when under Wolf or Bake Kitsune form
@@ -558,6 +654,11 @@ namespace Server
 
                 if (move != null)
                     value += move.GetAccuracyBonus(m);
+
+                #region City Loyalty
+                if (CityLoyaltySystem.HasTradeDeal(m, TradeDeal.WarriorsGuild))
+                    value += 5;
+                #endregion
 
                 #region SA
                 if (Spells.Mystic.SleepSpell.IsUnderSleepEffects(m))
@@ -577,8 +678,8 @@ namespace Server
                 if (LadyMelisande.UnderPutridNausea(m))
                     value -= 60;
 
-                if (Spells.Chivalry.DivineFurySpell.UnderEffect(m))
-                    value -= 20; // defender loses 20% bonus when they're under divine fury
+                if (DivineFurySpell.UnderEffect(m))
+                    value -= m.Skills[SkillName.Chivalry].Value >= 120.0 && m.Karma >= 10000 ? 10 : 20;
 
                 if (HitLower.IsUnderDefenseEffect(m))
                     value -= 25; // Under Hit Lower Defense effect -> 25% malus
@@ -604,6 +705,11 @@ namespace Server
             }
             else if (attribute == AosAttribute.RegenHits)
             {
+                #region City Loyalty
+                if (CityLoyaltySystem.HasTradeDeal(m, TradeDeal.MaritimeGuild))
+                    value += 2;
+                #endregion
+
                 #region High Seas
                 if (m is PlayerMobile && BaseFishPie.IsUnderEffects(m, FishPieEffect.HitsRegen))
                     value += 3;
@@ -627,12 +733,31 @@ namespace Server
             }
             else if (attribute == AosAttribute.RegenMana)
             {
+                #region City Loyalty
+                if (CityLoyaltySystem.HasTradeDeal(m, TradeDeal.MerchantsAssociation))
+                    value += 1;
+                #endregion
+
                 #region High Seas
                 if (m is PlayerMobile && BaseFishPie.IsUnderEffects(m, FishPieEffect.ManaRegen))
                     value += 3;
 
                 if (SurgeShield.IsUnderEffects(m, SurgeType.Mana))
                     value += 10;
+                #endregion
+            }
+            else if (attribute == AosAttribute.BonusDex)
+            {
+                #region City Loyalty
+                if (CityLoyaltySystem.HasTradeDeal(m, TradeDeal.OrderOfEngineers))
+                    value += 3;
+                #endregion
+            }
+            else if (attribute == AosAttribute.BonusStr)
+            {
+                #region City Loyalty
+                if (CityLoyaltySystem.HasTradeDeal(m, TradeDeal.MiningCooperative))
+                    value += 3;
                 #endregion
             }
             #endregion
@@ -1072,7 +1197,6 @@ namespace Server
         UseBestSkill = 0x00400000,
         MageWeapon = 0x00800000,
         DurabilityBonus = 0x01000000,
-        #region Stygian Abyss
         BloodDrinker = 0x02000000,
         BattleLust = 0x04000000,
         HitCurse = 0x08000000,
@@ -1080,7 +1204,7 @@ namespace Server
         HitManaDrain = 0x20000000,
         SplinteringWeapon = 0x40000000,
         ReactiveParalyze = 0x80000000,
-        #endregion
+        MysticWeapon = 0x100000000,
     }
 
     public sealed class AosWeaponAttributes : BaseAttributes
@@ -1616,6 +1740,19 @@ namespace Server
             }
         }
         #endregion
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public int MysticWeapon
+        {
+            get
+            {
+                return this[AosWeaponAttribute.MysticWeapon];
+            }
+            set
+            {
+                this[AosWeaponAttribute.MysticWeapon] = value;
+            }
+        }
     }
 
     [Flags]
@@ -2210,6 +2347,8 @@ namespace Server
                             value += attrs[attribute];
                     }
             }
+
+            value += SkillMasterySpell.GetAttributeBonus(m, attribute);
 
             return value;
         }

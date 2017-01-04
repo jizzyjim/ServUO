@@ -22,11 +22,7 @@ namespace Server
 				return 0;
 			}
 
-			int luck = killer.Luck;
-
-            luck += FountainOfFortune.GetLuckBonus(killer);
-
-            luck += TenthAnniversarySculpture.GetLuckBonus(killer);
+			int luck = killer is PlayerMobile ? ((PlayerMobile)killer).RealLuck : killer.Luck;
 
             PlayerMobile pmKiller = killer as PlayerMobile;
 			if (pmKiller != null && pmKiller.SentHonorContext != null && pmKiller.SentHonorContext.Target == victim)
@@ -590,7 +586,7 @@ namespace Server
             if (e == null)
                 return false;
 
-            return e.Map == Map.TerMur;
+            return e.Map == Map.TerMur || (!IsInTokuno(e) && !IsMondain(e) && Utility.RandomBool());
 		}
 		#endregion
 

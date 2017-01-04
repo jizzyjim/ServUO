@@ -41,7 +41,9 @@ namespace Server.Items
         Fortune, 
         Alchemy,
         Slaughter,
-        Aegis
+        Aegis,
+        Blackthorn,
+        Minax
     }
 
     public enum ItemPower
@@ -124,10 +126,14 @@ namespace Server.Items
 
         public static void ApplyReforgedProperties(Item item, ReforgedPrefix prefix, ReforgedSuffix suffix, bool playermade, int budget, int perclow, int perchigh, int maxmods, int luckchance, BaseRunicTool tool = null, ReforgingOption option = ReforgingOption.None)
         {
-            if (prefix == ReforgedPrefix.None && suffix == ReforgedSuffix.None)
+            if (prefix == ReforgedPrefix.None && (suffix == ReforgedSuffix.None || suffix > ReforgedSuffix.Aegis))
             {
                 for (int i = 0; i < maxmods; i++)
                     ApplyRunicAttributes(item, perclow, perchigh, ref budget, i, luckchance);
+
+                if (suffix != ReforgedSuffix.None)
+                    ApplySuffixName(item, suffix);
+
                 ApplyItemPower(item, playermade);
             }
             else
@@ -185,8 +191,6 @@ namespace Server.Items
 
                 int i = 0;
                 int mods = 0;
-                bool addedprefix = false;
-                bool addedsuffix = false;
 
                 int moddedPercLow = CalculateMinIntensity(perclow, perchigh, option);
                 int moddedPercHigh = perchigh;
@@ -202,7 +206,6 @@ namespace Server.Items
                             int random = Utility.Random(prefixCol.Count);
                             if (ApplyAttribute(item, prefixCol[random].Attribute, prefixCol[random].Min(resIndex, preIndex, item), prefixCol[random].Max(resIndex, preIndex, item), moddedPercLow, moddedPercHigh, ref budget, luckchance))
                             {
-                                addedprefix = true;
                                 specialAdd--;
                                 mods++;
                             }
@@ -215,7 +218,7 @@ namespace Server.Items
                         i++;
                     }
 
-                    if (addedprefix)
+                    if (prefix != ReforgedPrefix.None)
                         ApplyPrefixName(item, prefix);
                 }
                 else if (prefix == ReforgedPrefix.None && suffix != ReforgedSuffix.None && suffixCol != null)
@@ -229,7 +232,6 @@ namespace Server.Items
                             int random = Utility.Random(suffixCol.Count);
                             if (ApplyAttribute(item, suffixCol[random].Attribute, suffixCol[random].Min(resIndex, preIndex, item), suffixCol[random].Max(resIndex, preIndex, item), moddedPercLow, moddedPercHigh, ref budget, luckchance))
                             {
-                                addedsuffix = true;
                                 specialAdd--;
                                 mods++;
                             }
@@ -242,7 +244,7 @@ namespace Server.Items
                         i++;
                     }
 
-                    if (addedsuffix)
+                    if (suffix != ReforgedSuffix.None)
                         ApplySuffixName(item, suffix);
                 }
                 else if (prefix != ReforgedPrefix.None && suffix != ReforgedSuffix.None && prefixCol != null && suffixCol != null)
@@ -257,7 +259,6 @@ namespace Server.Items
                             int random = Utility.Random(prefixCol.Count);
                             if (ApplyAttribute(item, prefixCol[random].Attribute, prefixCol[random].Min(resIndex, preIndex, item), prefixCol[random].Max(resIndex, preIndex, item), moddedPercLow, moddedPercHigh, ref budget, luckchance))
                             {
-                                addedprefix = true;
                                 specialAddPrefix--;
                                 mods++;
                             }
@@ -269,7 +270,6 @@ namespace Server.Items
                             int random = Utility.Random(suffixCol.Count);
                             if (ApplyAttribute(item, suffixCol[random].Attribute, suffixCol[random].Min(resIndex, preIndex, item), suffixCol[random].Max(resIndex, preIndex, item), moddedPercLow, moddedPercHigh, ref budget, luckchance))
                             {
-                                addedsuffix = true;
                                 specialAddSuffix--;
                                 mods++;
                             }
@@ -282,10 +282,10 @@ namespace Server.Items
                         i++;
                     }
 
-                    if (addedprefix)
+                    if (prefix != ReforgedPrefix.None)
                         ApplyPrefixName(item, prefix);
 
-                    if (addedsuffix)
+                    if (suffix != ReforgedSuffix.None)
                         ApplySuffixName(item, suffix);
                 }
 
@@ -1146,7 +1146,7 @@ namespace Server.Items
                         return (int)(((BaseWeapon)item).MlSpeed * (weight * 100) / (100 + ((BaseWeapon)item).Attributes.WeaponSpeed));
                     }
 
-                    if (Info != null)
+                    if (info != null && resIndex >= 0 && resIndex < info.Length && preIndex >= 0 && preIndex < info[resIndex].Length)
                     {
                         return info[resIndex][preIndex];
                     }
@@ -1546,11 +1546,14 @@ namespace Server.Items
                 if (!(item is BaseWeapon) && suffix == ReforgedSuffix.Vampire)
                     suffix = ReforgedSuffix.None;
 
-                if (forcedprefix == ReforgedPrefix.None && budget >= Utility.Random(2700))
+                if (forcedprefix == ReforgedPrefix.None && budget >= Utility.Random(2700) && suffix != ReforgedSuffix.Minax)
                     prefix = ChooseRandomPrefix(item);
 
                 if (forcedsuffix == ReforgedSuffix.None && budget >= Utility.Random(2700))
                     suffix = ChooseRandomSuffix(item, prefix);
+
+                if (suffix == ReforgedSuffix.Minax)
+                    item.Hue = 1157;
 
                 int mods;
                 int perclow;
@@ -1604,7 +1607,7 @@ namespace Server.Items
 
             if (highest != null)
             {
-                return highest.Luck + TenthAnniversarySculpture.GetLuckBonus(highest) + FountainOfFortune.GetLuckBonus(highest);
+                return highest is PlayerMobile ? ((PlayerMobile)highest).RealLuck : highest.Luck;
             }
 
             return 0;
@@ -1632,6 +1635,9 @@ namespace Server.Items
 
             while ((int)prefix != 0 && random == (int)prefix)
                 random = item is BaseWeapon ? m_Weapon[Utility.Random(m_Weapon.Length)] : m_Standard[Utility.Random(m_Standard.Length)];
+
+            if (random == 13 || random == 14)
+                random = 50;
 
             return (ReforgedSuffix)random;
 
@@ -1951,7 +1957,7 @@ namespace Server.Items
                     neg.Antique = 1;
                     budget += 100;
                 }
-                else
+                else if(0.001 < chance)
                 {
                     neg.Brittle = 1;
                     budget += 150;
@@ -2746,12 +2752,12 @@ namespace Server.Items
 
         public static int[][] WeaponWeaponDamage = new int[][]
         {
-            new int[] { 30, 50, 50, 60, 70, 70, 70, 70 },
-            new int[] { 50, 60, 70, 70, 70, 70, 70, 70 },
-            new int[] { 70, 70, 70, 70, 70, 70, 70, 70 },
+            new int[] { 30, 50, 50, 60, 70, 70, 70 },
+            new int[] { 50, 60, 70, 70, 70, 70, 70 },
+            new int[] { 70, 70, 70, 70, 70, 70, 70 },
             new int[] {  },
-            new int[] { 50, 60, 70, 70, 70, 70, 70, 70 },
-            new int[] { 70, 70, 70, 70, 70, 70, 70, 70 },
+            new int[] { 50, 60, 70, 70, 70, 70, 70 },
+            new int[] { 70, 70, 70, 70, 70, 70, 70 },
         };
 
         public static int[][] WeaponEnhancePots = new int[][]

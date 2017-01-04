@@ -42,6 +42,7 @@ using Server.Spells.Sixth;
 using Server.Spells.Spellweaving;
 using Server.Targeting;
 using System.Linq;
+using Server.Spells.SkillMasteries;
 
 using RankDefinition = Server.Guilds.RankDefinition;
 #endregion
@@ -80,7 +81,8 @@ namespace Server.Mobiles
 		ToggleCutReeds = 0x02000000,
 		MechanicalLife = 0x04000000,
         HumilityHunt = 0x08000000,
-        ToggleCutTopiaries = 0x10000000
+        ToggleCutTopiaries = 0x10000000,
+        HasValiantStatReward = 0x20000000
     }
 
 	public enum NpcGuild
@@ -231,8 +233,12 @@ namespace Server.Mobiles
 
 		private DateTime m_LastOnline;
 		private RankDefinition m_GuildRank;
+        private bool m_NextEnhanceSuccess;
 
-		private int m_GuildMessageHue, m_AllianceMessageHue;
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool NextEnhanceSuccess { get { return m_NextEnhanceSuccess; } set { m_NextEnhanceSuccess = value; } }
+
+        private int m_GuildMessageHue, m_AllianceMessageHue;
 
 		private List<Mobile> m_AutoStabled;
 		private List<Mobile> m_AllFollowers;
@@ -245,8 +251,27 @@ namespace Server.Mobiles
 		public double GauntletPoints { get { return m_GauntletPoints; } set { m_GauntletPoints = value; } }
 		#endregion
 
-		#region Getters & Setters
-		public List<Mobile> RecentlyReported { get { return m_RecentlyReported; } set { m_RecentlyReported = value; } }
+        #region Points System
+        private PointsSystemProps _PointsSystemProps;
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public PointsSystemProps PointSystems
+        {
+            get
+            {
+                if (_PointsSystemProps == null)
+                    _PointsSystemProps = new PointsSystemProps(this);
+
+                return _PointsSystemProps;
+            }
+            set
+            {
+            }
+        }
+        #endregion
+
+        #region Getters & Setters
+        public List<Mobile> RecentlyReported { get { return m_RecentlyReported; } set { m_RecentlyReported = value; } }
 
 		public List<Mobile> AutoStabled { get { return m_AutoStabled; } }
 
@@ -392,22 +417,8 @@ namespace Server.Mobiles
 		[CommandProperty(AccessLevel.GameMaster)]
 		public bool HasStatReward { get { return GetFlag(PlayerFlag.HasStatReward); } set { SetFlag(PlayerFlag.HasStatReward, value); } }
 
-        /*#region QueensLoyaltySystem
-        public static readonly int Noble = 10000;
-
-		private long m_Exp; // Experience at the current Experience Level
-
-		[CommandProperty(AccessLevel.GameMaster)]
-		public long Exp
-		{
-			get { return m_Exp; }
-			set
-			{
-				m_Exp = value;
-				InvalidateProperties();
-			}
-		}
-		#endregion*/
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool HasValiantStatReward { get { return GetFlag(PlayerFlag.HasValiantStatReward); } set { SetFlag(PlayerFlag.HasValiantStatReward, value); } }
 
 		#region Plant system
 		[CommandProperty(AccessLevel.GameMaster)]
@@ -776,6 +787,7 @@ namespace Server.Mobiles
 				UpdateResistances();
 			}
 		}
+
         public override int GetMaxResistance(ResistanceType type)
         {
             if (IsStaff())
@@ -798,6 +810,71 @@ namespace Server.Mobiles
                 max += 5; //Intended to go after the 60 max from curse
 
             return max;
+        }
+
+        public override void ComputeResistances()
+        {
+            base.ComputeResistances();
+
+            for (int i = 0; i < Resistances.Length; ++i)
+            {
+                Resistances[i] = 0;
+            }
+
+            Resistances[0] += BasePhysicalResistance;
+            Resistances[1] += BaseFireResistance;
+            Resistances[2] += BaseColdResistance;
+            Resistances[3] += BasePoisonResistance;
+            Resistances[4] += BaseEnergyResistance;
+
+            for (int i = 0; ResistanceMods != null && i < ResistanceMods.Count; ++i)
+            {
+                ResistanceMod mod = ResistanceMods[i];
+                int v = (int)mod.Type;
+
+                if (v >= 0 && v < Resistances.Length)
+                {
+                    Resistances[v] += mod.Offset;
+                }
+            }
+
+            for (int i = 0; i < Items.Count; ++i)
+            {
+                Item item = Items[i];
+
+                if (item.CheckPropertyConfliction(this))
+                {
+                    continue;
+                }
+
+                bool setitem = item is ISetItem;
+                
+                Resistances[0] += setitem ? ((ISetItem)item).SetResistBonus(ResistanceType.Physical) : item.PhysicalResistance;
+                Resistances[1] += setitem ? ((ISetItem)item).SetResistBonus(ResistanceType.Fire) : item.FireResistance;
+                Resistances[2] += setitem ? ((ISetItem)item).SetResistBonus(ResistanceType.Cold) : item.ColdResistance;
+                Resistances[3] += setitem ? ((ISetItem)item).SetResistBonus(ResistanceType.Poison) : item.PoisonResistance;
+                Resistances[4] += setitem ? ((ISetItem)item).SetResistBonus(ResistanceType.Energy) : item.EnergyResistance;
+            }
+
+            for (int i = 0; i < Resistances.Length; ++i)
+            {
+                int min = GetMinResistance((ResistanceType)i);
+                int max = GetMaxResistance((ResistanceType)i);
+
+                if (max < min)
+                {
+                    max = min;
+                }
+
+                if (Resistances[i] > max)
+                {
+                    Resistances[i] = max;
+                }
+                else if (Resistances[i] < min)
+                {
+                    Resistances[i] = min;
+                }
+            }
         }
 
 		protected override void OnRaceChange(Race oldRace)
@@ -895,7 +972,22 @@ namespace Server.Mobiles
 			return Math.Max(MinPlayerResistance, Math.Min(MaxPlayerResistance, min));
 		}
 
-		public override void OnManaChange(int oldValue)
+        #region City Loyalty
+        public override int GetResistance(ResistanceType type)
+        {
+            int resistance = base.GetResistance(type);
+
+            if (Server.Engines.CityLoyalty.CityLoyaltySystem.HasTradeDeal(this, Server.Engines.CityLoyalty.TradeDeal.SocietyOfClothiers))
+            {
+                resistance++;
+                 return Math.Min(resistance, GetMaxResistance(type));
+            }
+
+            return resistance;
+        }
+        #endregion
+
+        public override void OnManaChange(int oldValue)
 		{
 			base.OnManaChange(oldValue);
 			if (m_ExecutesLightningStrike > 0)
@@ -1181,6 +1273,16 @@ namespace Server.Mobiles
 							moved = true;
 						}
 					}
+                    else if (item is BaseQuiver)
+                    {
+                        if (Race == Race.Gargoyle)
+                        {
+                            from.AddToBackpack(item);
+
+                            from.SendLocalizedMessage(1062002, "quiver"); // You can no longer wear your ~1_ARMOR~
+                            moved = true;
+                        }
+                    }
 
 					FactionItem factionItem = FactionItem.Find(item);
 
@@ -1390,8 +1492,10 @@ namespace Server.Mobiles
 			}
 		}
 
-		public override bool CanBeHarmful(Mobile target, bool message, bool ignoreOurBlessedness)
+		public override bool CanBeHarmful(IDamageable damageable, bool message, bool ignoreOurBlessedness)
 		{
+            Mobile target = damageable as Mobile;
+
 			if (m_DesignContext != null || (target is PlayerMobile && ((PlayerMobile)target).m_DesignContext != null))
 			{
 				return false;
@@ -1422,7 +1526,15 @@ namespace Server.Mobiles
 				return false;
 			}
 
-			return base.CanBeHarmful(target, message, ignoreOurBlessedness);
+            if (damageable is IDamageableItem && !((IDamageableItem)damageable).CanDamage)
+            {
+                if (message)
+                    SendMessage("That cannot be harmed.");
+
+                return false;
+            }
+
+			return base.CanBeHarmful(damageable, message, ignoreOurBlessedness);
 		}
 
 		public override bool CanBeBeneficial(Mobile target, bool message, bool allowDead)
@@ -1531,6 +1643,10 @@ namespace Server.Mobiles
 					{
 						strOffs += 20;
 					}
+
+                    // Skill Masteries
+                    if(Core.TOL)
+                        strOffs += ToughnessSpell.GetHPBonus(this);
 				}
 				else
 				{
@@ -1548,7 +1664,9 @@ namespace Server.Mobiles
 		public override int ManaMax { get
 		{
 			return base.ManaMax + AosAttributes.GetValue(this, AosAttribute.BonusMana) +
-				   ((Core.ML && Race == Race.Elf) ? 20 : 0);
+				   ((Core.ML && Race == Race.Elf) ? 20 : 0) +
+                   MasteryInfo.IntuitionBonus(this) +
+                   UraliTranceTonic.GetManaBuff(this);
 		} }
 		#endregion
 
@@ -1655,7 +1773,15 @@ namespace Server.Mobiles
 
 			if (context == null)
 			{
-				return base.CheckMovement(d, out newZ);
+                bool check = base.CheckMovement(d, out newZ);
+
+                if (check && Sigil.ExistsOn(this, true) && !Server.Engines.VvV.VvVSigil.CheckMovement(this, d))
+                {
+                    SendLocalizedMessage(1155414); // You may not remove the sigil from the battle region!
+                    return false;
+                }
+
+                return check;
 			}
 
 			HouseFoundation foundation = context.Foundation;
@@ -1672,6 +1798,59 @@ namespace Server.Mobiles
 
 			return (newX >= startX && newY >= startY && newX < endX && newY < endY && Map == foundation.Map);
 		}
+
+        public override void OnHitsChange(int oldValue)
+        {
+            if (Race == Race.Gargoyle)
+            {
+                if (Hits <= HitsMax / 2)
+                {
+                    BuffInfo.AddBuff(this, new BuffInfo(BuffIcon.Berserk, 1080449, 1115021, String.Format("{0}\t{1}", GetRacialBerserkBuff(false), GetRacialBerserkBuff(true)), false));
+                    Delta(MobileDelta.WeaponDamage);
+                }
+                else if (oldValue < Hits && Hits > HitsMax / 2)
+                {
+                    BuffInfo.RemoveBuff(this, BuffIcon.Berserk);
+                    Delta(MobileDelta.WeaponDamage);
+                }
+            }
+
+            base.OnHitsChange(oldValue);
+        }
+
+        /// <summary>
+        /// Returns Racial Berserk value, for spell or melee
+        /// </summary>
+        /// <param name="spell">true for spell damage, false for damage increase (melee)</param>
+        /// <returns></returns>
+        public virtual int GetRacialBerserkBuff(bool spell)
+        {
+            if (Race != Race.Gargoyle || Hits > HitsMax / 2)
+                return 0;
+
+            double perc = ((double)Hits / (double)HitsMax) * 100;
+            int value = 0;
+
+            perc = (100 - perc) / 20;
+
+            if (perc > 4)
+                value += spell ? 12 : 60;
+            else if (perc >= 3)
+                value += spell ? 9 : 45;
+            else if (perc >= 2)
+                value += spell ? 6 : 30;
+            else if (perc >= 1)
+                value += spell ? 3 : 15;
+
+            return value;
+        }
+
+        public override void OnHeal(ref int amount, Mobile from)
+        {
+            BestialSetHelper.OnHeal(this, from, ref amount);
+
+            base.OnHeal(ref amount, from);
+        }
 
 		public override bool AllowItemUse(Item item)
 		{
@@ -1865,10 +2044,18 @@ namespace Server.Mobiles
 				}
 
                 Region r = Region.Find(this.Location, this.Map);
+
+                #region Void Pool
                 if (r is Server.Engines.VoidPool.VoidPoolRegion && ((Server.Engines.VoidPool.VoidPoolRegion)r).Controller != null)
                     list.Add(new Server.Engines.Points.VoidPoolInfo(this));
+                #endregion
 
-				if (!Core.SA && Alive)
+                #region TOL Shadowguard
+                if (Server.Engines.Shadowguard.ShadowguardController.GetInstance(this.Location, this.Map) != null)
+                    list.Add(new Server.Engines.Shadowguard.ExitEntry(this));
+                #endregion
+
+                if (!Core.SA && Alive)
 				{
 					list.Add(new CallbackEntry(6210, ToggleChampionTitleDisplay));
 				}
@@ -2444,6 +2631,7 @@ namespace Server.Mobiles
 
 			base.DisruptiveAction();
 		}
+
         public override bool Meditating
         {
             set
@@ -2952,6 +3140,22 @@ namespace Server.Mobiles
 			}
 			return false;
 		}
+		
+		public override bool Criminal
+        	{
+            		get
+            		{
+                		if (this.Alive)
+                		{
+                    			if (base.Criminal)
+                        			BuffInfo.AddBuff(this, new BuffInfo(BuffIcon.CriminalStatus, 1153802, 1153828));
+                    			else
+                        			BuffInfo.RemoveBuff(this, BuffIcon.CriminalStatus);
+                		}
+
+                		return base.Criminal;
+            		}
+        	}
 
 		public override bool OnBeforeDeath()
 		{
@@ -2961,8 +3165,11 @@ namespace Server.Mobiles
 			{
 				state.CancelAllTrades();
 			}
+			
+			if (Criminal)
+                		BuffInfo.RemoveBuff(this, BuffIcon.CriminalStatus);
 
-			DropHolding();
+            DropHolding();
 
 			if (Core.AOS && Backpack != null && !Backpack.Deleted)
 			{
@@ -3476,55 +3683,15 @@ namespace Server.Mobiles
 			SendToStaffMessage(from, String.Format(format, args));
 		}
 
-		public override void Damage(int amount, Mobile from)
-		{
-			if (EvilOmenSpell.TryEndEffect(this))
-			{
-				amount = (int)(amount * 1.25);
-			}
+        public override void Damage(int amount, Mobile from)
+        {
+            Damage(amount, from, false, false);
+        }
 
-			Mobile oath = BloodOathSpell.GetBloodOath(from);
-
-			/* Per EA's UO Herald Pub48 (ML):
-			* ((resist spellsx10)/20 + 10=percentage of damage resisted)
-			*/
-
-			if (oath == this)
-			{
-				amount = (int)(amount * 1.1);
-
-				if (amount > 35 && from is PlayerMobile) /* capped @ 35, seems no expansion */
-				{
-					amount = 35;
-				}
-
-				if (Core.ML)
-				{
-					from.Damage((int)(amount * (1 - (((from.Skills.MagicResist.Value * .5) + 10) / 100))), this);
-				}
-				else
-				{
-					from.Damage(amount, this);
-				}
-			}
-
-			if (from != null && Talisman is BaseTalisman)
-			{
-				BaseTalisman talisman = (BaseTalisman)Talisman;
-
-				if (talisman.Protection != null && talisman.Protection.Type != null)
-				{
-					Type type = talisman.Protection.Type;
-
-					if (type.IsAssignableFrom(from.GetType()))
-					{
-						amount = (int)(amount * (1 - (double)talisman.Protection.Amount / 100));
-					}
-				}
-			}
-
-			base.Damage(amount, from);
-		}
+        public override void Damage(int amount, Mobile from, bool informMount)
+        {
+            Damage(amount, from, informMount, false);
+        }
 
 		#region Poison
 		public override ApplyPoisonResult ApplyPoison(Mobile from, Poison poison)
@@ -3533,6 +3700,12 @@ namespace Server.Mobiles
 			{
 				return ApplyPoisonResult.Immune;
 			}
+
+            //Skill Masteries
+            if (SkillMasterySpell.GetSpellForParty(this, typeof(Spells.SkillMasteries.ResilienceSpell)) != null && 0.25 > Utility.RandomDouble())
+            {
+                return ApplyPoisonResult.Immune;
+            }
 
 			if (EvilOmenSpell.TryEndEffect(this))
 			{
@@ -3587,8 +3760,12 @@ namespace Server.Mobiles
 
 		public override int Luck { get { return AosAttributes.GetValue(this, AosAttribute.Luck); } }
 
-		public override bool IsHarmfulCriminal(Mobile target)
+        public int RealLuck { get { return Luck + TenthAnniversarySculpture.GetLuckBonus(this) + FountainOfFortune.GetLuckBonus(this); } }
+
+		public override bool IsHarmfulCriminal(IDamageable damageable)
 		{
+            Mobile target = damageable as Mobile;
+
 			if (Stealing.ClassicMode && target is PlayerMobile && ((PlayerMobile)target).m_PermaFlags.Count > 0)
 			{
 				int noto = Notoriety.Compute(this, target);
@@ -3612,7 +3789,7 @@ namespace Server.Mobiles
 				return false;
 			}
 
-			return base.IsHarmfulCriminal(target);
+			return base.IsHarmfulCriminal(damageable);
 		}
 
 		public bool AntiMacroCheck(Skill skill, object obj)
@@ -3680,7 +3857,7 @@ namespace Server.Mobiles
                         m_ShowGuildAbbreviation = version > 31 ? reader.ReadBool() : false;
                         m_FameKarmaTitle = reader.ReadString();
                         m_PaperdollSkillTitle = reader.ReadString();
-                        m_OverheadSkillTitle = reader.ReadString();
+                        m_OverheadTitle = reader.ReadString();
                         m_SubtitleSkillTitle = reader.ReadString();
 
                         m_CurrentChampTitle = reader.ReadString();
@@ -4105,7 +4282,7 @@ namespace Server.Mobiles
             writer.Write(m_ShowGuildAbbreviation);
             writer.Write(m_FameKarmaTitle);
             writer.Write(m_PaperdollSkillTitle);
-            writer.Write(m_OverheadSkillTitle);
+            writer.Write(m_OverheadTitle);
             writer.Write(m_SubtitleSkillTitle);
             writer.Write(m_CurrentChampTitle);
             writer.Write(m_CurrentVeteranTitle);
@@ -4427,7 +4604,13 @@ namespace Server.Mobiles
 				{
 					if (m_CollectionTitles[m_SelectedTitle] is int)
 					{
-						list.Add((int)m_CollectionTitles[m_SelectedTitle]);
+                        string cust = null;
+                        if ((int)m_CollectionTitles[m_SelectedTitle] == 1154017 && Server.Engines.CityLoyalty.CityLoyaltySystem.HasCustomTitle(this, out cust))
+                        {
+                            list.Add(1154017, cust); // ~1_TITLE~ of ~2_CITY~
+                        }
+						else
+                            list.Add((int)m_CollectionTitles[m_SelectedTitle]);
 					}
 					else if (m_CollectionTitles[m_SelectedTitle] is string)
 					{
@@ -4881,7 +5064,7 @@ namespace Server.Mobiles
         private string m_PaperdollSkillTitle;
         private string m_SubtitleSkillTitle;
         private string m_CurrentChampTitle;
-        private string m_OverheadSkillTitle;
+        private string m_OverheadTitle;
         private int m_CurrentVeteranTitle;
         private bool m_ShowGuildAbbreviation;
 
@@ -4909,10 +5092,10 @@ namespace Server.Mobiles
             set { m_CurrentChampTitle = value; InvalidateProperties(); }
         }
 
-        public string OverheadSkillTitle
+        public string OverheadTitle
         {
-            get { return m_OverheadSkillTitle; }
-            set { m_OverheadSkillTitle = value; InvalidateProperties(); }
+            get { return m_OverheadTitle; }
+            set { m_OverheadTitle = value; InvalidateProperties(); }
         }
 
         public int CurrentVeteranTitle
@@ -4971,17 +5154,32 @@ namespace Server.Mobiles
             }
 
             BaseGuild guild = Guild;
+            bool vvv = Server.Engines.VvV.ViceVsVirtueSystem.IsVvV(this) && this.Map == Faction.Facet;
 
-            if (m_OverheadSkillTitle != null)
+            if (!vvv && m_OverheadTitle != null)
             {
-                if (suffix.Length > 0)
-                    suffix = String.Format("{0} {1}", suffix, m_OverheadSkillTitle);
+                int loc = Utility.ToInt32(m_OverheadTitle);
+
+                if (loc > 0)
+                {
+                    if(Server.Engines.CityLoyalty.CityLoyaltySystem.ApplyCityTitle(this, list, prefix, loc))
+                        return;
+                }
+                else if (suffix.Length > 0)
+                    suffix = String.Format("{0} {1}", suffix, m_OverheadTitle);
                 else
-                    suffix = String.Format("{0}", m_OverheadSkillTitle);
+                    suffix = String.Format("{0}", m_OverheadTitle);
             }
-            else if (guild != null && m_ShowGuildAbbreviation)
+            else if (vvv || (guild != null && m_ShowGuildAbbreviation))
             {
-                if (suffix.Length > 0)
+                if (vvv)
+                {
+                    if (guild != null && m_ShowGuildAbbreviation)
+                        suffix = String.Format("[{0}][VvV]", Utility.FixHtml(guild.Abbreviation));
+                    else
+                        suffix = "[VvV]";
+                }
+                else if (suffix.Length > 0)
                     suffix = String.Format("{0} [{1}]", suffix, Utility.FixHtml(guild.Abbreviation));
                 else
                     suffix = String.Format("[{0}]", Utility.FixHtml(guild.Abbreviation));
@@ -5201,6 +5399,13 @@ namespace Server.Mobiles
 				}
 
 				m_EnemyOfOneType = value;
+
+                //TODO: Figure an efficient way to naming the creature, pluralized!!!
+                /*if (m_EnemyOfOneType != null)
+                {
+                    BuffInfo.AddBuff(this.Caster, new BuffInfo(BuffIcon.EnemyOfOne, 1075653, 1075654, TimeSpan.FromMinutes(delay), this.Caster, 
+                        String.Format("{0}\t{1}\t{2}\t{3}", "50", )));
+                }*/
 
 				DeltaEnemies(oldType, newType);
 			}

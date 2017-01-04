@@ -1,8 +1,10 @@
 using System;
 using Server.Engines.VeteranRewards;
+using Server.Engines.Craft;
 
 namespace Server.Items
 {
+    [Alterable(typeof(DefTailoring), typeof(GargishLeatherWingArmor), true)]
     public abstract class BaseCloak : BaseClothing
     {
         public BaseCloak(int itemID)
@@ -497,6 +499,95 @@ namespace Server.Items
         }
 
         public GargishRobe(Serial serial)
+            : base(serial)
+        {
+        }
+
+        public override void Serialize(GenericWriter writer)
+        {
+            base.Serialize(writer);
+
+            writer.Write((int)0); // version
+        }
+
+        public override void Deserialize(GenericReader reader)
+        {
+            base.Deserialize(reader);
+
+            int version = reader.ReadInt();
+        }
+    }
+
+    public class Epaulette : BaseClothing
+    {
+        public override int LabelNumber { get { return 1123325; } } // Epaulette
+
+        [Constructable]
+        public Epaulette()
+            : this(0)
+        {
+        }
+
+        [Constructable]
+        public Epaulette(int hue)
+            : base(0x9985, Layer.Cloak, hue)
+        {
+            this.Weight = 1.0;
+        }
+
+        public Epaulette(Serial serial)
+            : base(serial)
+        {
+        }
+
+        public override void Serialize(GenericWriter writer)
+        {
+            base.Serialize(writer);
+
+            writer.Write((int)0); // version
+        }
+
+        public override void Deserialize(GenericReader reader)
+        {
+            base.Deserialize(reader);
+
+            int version = reader.ReadInt();
+        }
+    }
+
+    public class GargishEpaulette : BaseClothing
+    {
+        public override int LabelNumber { get { return 1123326; } } // Gargish Epaulette
+
+        public override Race RequiredRace
+        {
+            get
+            {
+                return Race.Gargoyle;
+            }
+        }
+        public override bool CanBeWornByGargoyles
+        {
+            get
+            {
+                return true;
+            }
+        }
+
+        [Constructable]
+        public GargishEpaulette()
+            : this(0)
+        {
+        }
+
+        [Constructable]
+        public GargishEpaulette(int hue)
+            : base(0x9986, Layer.Cloak, hue)
+        {
+            this.Weight = 1.0;
+        }
+
+        public GargishEpaulette(Serial serial)
             : base(serial)
         {
         }

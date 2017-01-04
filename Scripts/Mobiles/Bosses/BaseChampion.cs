@@ -34,6 +34,9 @@ namespace Server.Mobiles
                 return false;
             }
         }
+
+        public virtual bool CanGivePowerscrolls { get { return true; } }
+
         public static void GivePowerScrollTo(Mobile m)
         {
             if (m == null)	//sanity
@@ -204,7 +207,7 @@ namespace Server.Mobiles
 
         public override bool OnBeforeDeath()
         {
-            if (!this.NoKillAwards)
+            if (CanGivePowerscrolls && !NoKillAwards)
             {
                 this.GivePowerScrolls();
 
@@ -233,13 +236,21 @@ namespace Server.Mobiles
                         toGive.Add(ds.m_Mobile);
                 }
 
-                if (toGive.Count > 0)
-                    toGive[Utility.Random(toGive.Count)].AddToBackpack(new ChampionSkull(this.SkullType));
-                else
-                    c.DropItem(new ChampionSkull(this.SkullType));
+                if (SkullType != ChampionSkullType.None)
+                {
+                    if (toGive.Count > 0)
+                        toGive[Utility.Random(toGive.Count)].AddToBackpack(new ChampionSkull(this.SkullType));
+                    else
+                        c.DropItem(new ChampionSkull(this.SkullType));
+                }
 
                 if(Core.SA)
                     RefinementComponent.Roll(c, 3, 0.10);
+
+                #region TOL
+                if(Core.TOL)
+                    SkillMasteryPrimer.CheckPrimerDrop(this);
+                #endregion
             }
 
             base.OnDeath(c);
