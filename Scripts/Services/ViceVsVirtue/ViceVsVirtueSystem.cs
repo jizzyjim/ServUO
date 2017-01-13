@@ -81,6 +81,7 @@ namespace Server.Engines.VvV
             if (ventry != null && ventry.Active)
             {
                 List<DamageEntry> list = victim.DamageEntries.OrderBy(d => -d.DamageGiven).ToList();
+                List<Mobile> handled = new List<Mobile>();
                 bool statloss = false;
 
                 for(int i = 0; i < list.Count; i++)
@@ -96,12 +97,14 @@ namespace Server.Engines.VvV
                     {
                         VvVPlayerEntry kentry = GetPlayerEntry<VvVPlayerEntry>(dam);
 
-                        if (kentry != null)
+                        if (kentry != null && !handled.Contains(dam))
                         {
                             if (i == 0)
                                 Battle.Update(ventry, kentry, UpdateType.Kill);
                             else
                                 Battle.Update(ventry, kentry, UpdateType.Assist);
+
+                            handled.Add(dam);
                         }
                     }
 
@@ -112,8 +115,8 @@ namespace Server.Engines.VvV
                 if (statloss)
                     Faction.ApplySkillLoss(victim);
 
-                list.Clear();
-                list.TrimExcess();
+                ColUtility.Free(list);
+                ColUtility.Free(handled);
             }
         }
 
@@ -130,6 +133,8 @@ namespace Server.Engines.VvV
 
             pm.SendLocalizedMessage(1155564); // You have joined Vice vs Virtue!
             pm.SendLocalizedMessage(1063156, g.Name); // The guild information for ~1_val~ has been updated.
+
+            pm.ProcessDelta();
 
             CheckBattleStatus(pm);
         }
@@ -265,35 +270,6 @@ namespace Server.Engines.VvV
             m.SendLocalizedMessage(cliloc, false, "[Guild][VvV] ", args, m is PlayerMobile ? ((PlayerMobile)m).GuildMessageHue : 0x34);
         }
 
-        public void OnBattleEnd()
-        {
-            foreach (KeyValuePair<Guild, VvVGuildBattleStats> kvp in Battle.GuildStats)
-            {
-                Guild g = kvp.Key;
-
-                if (!GuildStats.ContainsKey(g))
-                    GuildStats[g] = new VvVGuildStats(g);
-
-                int score = (int)kvp.Value.Points;
-
-                GuildStats[g].Kills += kvp.Value.Kills;
-                GuildStats[g].ReturnedSigils += kvp.Value.ReturnedSigils;
-                GuildStats[g].Score += score;
-
-                List<Mobile> list = g.Members.Where(mob => mob.NetState != null && mob.Region.IsPartOf(Battle.Region)).ToList();
-
-                foreach (Mobile m in list)
-                {
-                    VvVPlayerEntry entry = GetPlayerEntry<VvVPlayerEntry>(m, true);
-
-                    if (entry != null)
-                    {
-                        entry.Score += score;
-                    }
-                }
-            }
-        }
-
         private List<Item> VvVItems = new List<Item>();
 
         public void AddVvVItem(Item item)
@@ -356,7 +332,7 @@ namespace Server.Engines.VvV
             }
         }
 
-        public static bool IsVvV(Mobile m, bool checkpet = true)
+        public static bool IsVvV(Mobile m, bool checkpet = true, bool guildedonly = false)
         {
             if (m is BaseCreature && checkpet)
             {
@@ -369,10 +345,10 @@ namespace Server.Engines.VvV
             if (entry == null)
                 return false;
 
-            return entry.Active;
+            return entry.Active && (!guildedonly || entry.Guild != null);
         }
 
-        public static bool IsVvV(Mobile m, out VvVPlayerEntry entry, bool checkpet = true)
+        public static bool IsVvV(Mobile m, out VvVPlayerEntry entry, bool checkpet = true, bool guildedonly = false)
         {
             if (m is BaseCreature && checkpet)
             {
@@ -385,7 +361,7 @@ namespace Server.Engines.VvV
             if (entry != null && !entry.Active)
                 entry = null;
 
-            return entry != null;
+            return entry.Active && (!guildedonly || entry.Guild != null);
         }
 
         public static bool IsEnemy(IDamageable from, IDamageable to)
@@ -400,6 +376,10 @@ namespace Server.Engines.VvV
         public static bool IsEnemy(Mobile from, Mobile to)
         {
             //TODO: Support for VvV city games regarding non-participants in the city, as well as ones who flagged
+            if(from == null || to == null)
+                return false;
+                
+            //basecreatures convert to their masters
             if (from is BaseCreature && ((BaseCreature)from).GetMaster() is PlayerMobile)
                 from = ((BaseCreature)from).GetMaster();
 
@@ -409,6 +389,7 @@ namespace Server.Engines.VvV
             VvVPlayerEntry fromentry = Instance.GetPlayerEntry<VvVPlayerEntry>(from);
             VvVPlayerEntry toentry = Instance.GetPlayerEntry<VvVPlayerEntry>(to);
 
+            // TODO: Support for FlaggedTo. For now, any of these are null or inactive, not enemies!
             if (fromentry == null || toentry == null || !fromentry.Active || !toentry.Active)
             {
                 if (fromentry != null && toentry == null && FlaggedTo != null && FlaggedTo.ContainsKey(from) && FlaggedTo[from] == to)
@@ -417,12 +398,14 @@ namespace Server.Engines.VvV
                 return false;
             }
 
-            Guild fromguild = fromentry.Guild;
-            Guild toguild = toentry.Guild;
-
-            if (toguild == null || fromguild == null)
+            Guild fromguild = from.Guild as Guild;
+            Guild toguild = to.Guild as Guild;
+            
+            // This will handle those who recently quit VvV, they are always attackable
+            if ((toguild == null && fromguild != null)  || (fromguild == null && toguild != null))
                 return true;
 
+            // in the guild, and/or allied
             return fromguild != toguild && !fromguild.IsAlly(toguild);
         }
 
