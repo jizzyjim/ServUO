@@ -1385,6 +1385,9 @@ namespace Server.Items
 				chance = 0.02;
 			}
 
+            if (Core.AOS && m_AosWeaponAttributes.MageWeapon > 0 && attacker.Skills[SkillName.Magery].Value > atkSkill.Value)
+                return attacker.CheckSkill(SkillName.Magery, chance);
+
 			return attacker.CheckSkill(atkSkill.SkillName, chance);
 		}
 
@@ -4869,7 +4872,7 @@ namespace Server.Items
 				return true;
 			}
 
-            return AosAttributes.GetValue(from, AosAttribute.SpellChanneling) > 0;
+            return m_AosAttributes.SpellChanneling > 0;
 		}
 
 		public virtual int ArtifactRarity { get { return 0; } }
