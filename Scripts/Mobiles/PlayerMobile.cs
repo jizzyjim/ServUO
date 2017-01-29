@@ -1148,6 +1148,8 @@ namespace Server.Mobiles
 					}
 					#endregion
 
+                    bool morph = from.FindItemOnLayer(Layer.Earrings) is MorphEarrings;
+
 					if (item is BaseWeapon)
 					{
 						BaseWeapon weapon = (BaseWeapon)item;
@@ -1166,7 +1168,7 @@ namespace Server.Mobiles
 						{
 							drop = true;
 						}
-						else if (weapon.RequiredRace != null && weapon.RequiredRace != Race)
+                        else if (weapon.RequiredRace != null && weapon.RequiredRace != Race && !morph)
 						{
 							drop = true;
 						}
@@ -1199,7 +1201,7 @@ namespace Server.Mobiles
 						{
 							drop = true;
 						}
-						else if (armor.RequiredRace != null && armor.RequiredRace != Race)
+                        else if (armor.RequiredRace != null && armor.RequiredRace != Race && !morph)
 						{
 							drop = true;
 						}
@@ -1259,7 +1261,7 @@ namespace Server.Mobiles
 						{
 							drop = true;
 						}
-						else if (clothing.RequiredRace != null && clothing.RequiredRace != Race)
+                        else if (clothing.RequiredRace != null && clothing.RequiredRace != Race && !morph)
 						{
 							drop = true;
 						}
@@ -3898,6 +3900,11 @@ namespace Server.Mobiles
 
 			switch (version)
 			{
+                case 33:
+                    {
+                        m_ExploringTheDeepQuest = (ExploringTheDeepQuestChain)reader.ReadInt();
+                        goto case 31;
+                    }
                 case 32:
                 case 31:
                     {
@@ -4323,7 +4330,10 @@ namespace Server.Mobiles
 
 			base.Serialize(writer);
 
-			writer.Write(32); // version
+			writer.Write(33); // version
+
+            // Version 31/32 Titles
+            writer.Write((int)m_ExploringTheDeepQuest);
 
             // Version 31/32 Titles
             writer.Write(m_ShowGuildAbbreviation);
@@ -6339,9 +6349,16 @@ namespace Server.Mobiles
 				m_BuffTable = null;
 			}
 		}
-		#endregion
+        #endregion
 
-		public void AutoStablePets()
+        #region Exploring the Deep
+        private ExploringTheDeepQuestChain m_ExploringTheDeepQuest;
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public ExploringTheDeepQuestChain ExploringTheDeepQuest { get { return m_ExploringTheDeepQuest; } set { m_ExploringTheDeepQuest = value; } }
+        #endregion
+
+        public void AutoStablePets()
 		{
 			if (Core.SE && AllFollowers.Count > 0)
 			{

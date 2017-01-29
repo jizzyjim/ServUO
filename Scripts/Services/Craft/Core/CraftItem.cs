@@ -88,6 +88,8 @@ namespace Server.Engines.Craft
         }
         #endregion
 
+        public Func<Mobile, ConsumeType, int> ConsumeResCallback { get; set; }
+
         private Recipe m_Recipe;
 
 		public Recipe Recipe { get { return m_Recipe; } }
@@ -411,7 +413,7 @@ namespace Server.Engines.Craft
 			typeof(BambooChair), typeof(WoodenChair), typeof(FancyWoodenChairCushion), typeof(WoodenChairCushion),
 			typeof(Nightstand), typeof(LargeTable), typeof(WritingTable), typeof(YewWoodTable), typeof(PlainLowTable),
 			typeof(ElegantLowTable), typeof(Dressform), typeof(BasePlayerBB), typeof(BaseContainer), typeof(BarrelStaves),
-			typeof(BarrelLid), typeof(Clippers)
+			typeof(BarrelLid), typeof(Clippers), typeof(Scissors), typeof(BaseTool)
 		};
 
 		private static readonly Dictionary<Type, Type> m_ResourceConversionTable = new Dictionary<Type, Type>()
@@ -822,6 +824,17 @@ namespace Server.Engines.Craft
 			{
 				return false;
 			}
+
+            if (ConsumeResCallback != null)
+            {
+                int resMessage = ConsumeResCallback(from, consumeType);
+
+                if (resMessage > 0)
+                {
+                    message = resMessage;
+                    return false;
+                }
+            }
 
 			if (m_NeedHeat && !Find(from, m_HeatSources))
 			{
