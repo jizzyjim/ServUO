@@ -7,6 +7,7 @@ using System.Linq;
 using System.Collections.Generic;
 using Server.Engines.CityLoyalty;
 using Server.Engines.VvV;
+using Server.Engines.ArenaSystem;
 
 namespace Server.Engines.Points
 {
@@ -36,7 +37,10 @@ namespace Server.Engines.Points
 
         Blackthorn,
         CleanUpBritannia,
-        ViceVsVirtue
+        ViceVsVirtue,
+
+        TreasuresOfKotlCity,
+        PVPArena
     }
 
     public abstract class PointsSystem
@@ -218,10 +222,12 @@ namespace Server.Engines.Points
         {
             return new PointsEntry(pm);
         }
+        
+        public int Version { get; set; }
 
         public virtual void Serialize(GenericWriter writer)
         {
-            writer.Write((int)1);
+            writer.Write((int)2);
 
             writer.Write(PlayerTable.Count);
 
@@ -234,31 +240,35 @@ namespace Server.Engines.Points
 
         public virtual void Deserialize(GenericReader reader)
         {
-            int version = reader.ReadInt();
+            Version = reader.ReadInt();
 
-            switch (version)
+            switch (Version)
             {
-                case 0:
+                case 2: // added serialize/deserialize in all base classes. Poor implementation on my part, should have had from the get-go
                 case 1:
-                    int count = reader.ReadInt();
-                    for (int i = 0; i < count; i++)
-                    {
-                        PlayerMobile player = reader.ReadMobile() as PlayerMobile;
-                        PointsEntry entry = GetSystemEntry(player);
-                        
-                        if (version > 0)
-                            entry.Deserialize(reader);
-                        else
-                            entry.Points = reader.ReadDouble();
+                case 0:
+					{
+	                    int count = reader.ReadInt();
 
-                        if (player != null)
-                        {
-                            if (!PlayerTable.Contains(entry))
-                            {
-                                PlayerTable.Add(entry);
-                            }
-                        }
-                    }
+	                    for (int i = 0; i < count; i++)
+	                    {
+	                        PlayerMobile player = reader.ReadMobile() as PlayerMobile;
+	                        PointsEntry entry = GetSystemEntry(player);
+	
+	                        if (Version > 0)
+	                            entry.Deserialize(reader);
+	                        else
+	                            entry.Points = reader.ReadDouble();
+	
+	                        if (player != null)
+	                        {
+	                            if (!PlayerTable.Contains(entry))
+	                            {
+	                                PlayerTable.Add(entry);
+	                            }
+	                        }
+	                    }
+					}
                     break;
             }
         }
@@ -297,14 +307,33 @@ namespace Server.Engines.Points
                     if (version < 2)
                         reader.ReadBool();
 
+                    List<PointsType> loaded = new List<PointsType>();
+
 					int count = reader.ReadInt();
 					for(int i = 0; i < count; i++)
 					{
-						PointsType type = (PointsType)reader.ReadInt();
-						PointsSystem s = GetSystemInstance(type);
+                        try
+                        {
+                            PointsType type = (PointsType)reader.ReadInt();
+                            PointsSystem s = GetSystemInstance(type);
 
-					    s.Deserialize(reader);
-					}	
+                            s.Deserialize(reader);
+
+                            if (!loaded.Contains(type))
+                                loaded.Add(type);
+                        }
+                        catch (Exception e)
+                        {
+                            foreach (var success in loaded)
+                                Console.WriteLine("[Points System] Successfully Loaded: {0}", success.ToString());
+
+                            loaded.Clear();
+
+                            throw new Exception(String.Format("[Points System]: {0}", e));
+                        }
+					}
+
+                    loaded.Clear();
 				});
 		}
 
@@ -318,6 +347,8 @@ namespace Server.Engines.Points
         public static BlackthornData Blackthorn { get; set; }
         public static CleanUpBritanniaData CleanUpBritannia { get; set; }
         public static ViceVsVirtueSystem ViceVsVirtue { get; set; }
+        public static KotlCityData TreasuresOfKotlCity { get; set; }
+        public static PVPArenaSystem ArenaSystem { get; set; }
 
         public static void Configure()
         {
@@ -334,8 +365,10 @@ namespace Server.Engines.Points
             Blackthorn = new BlackthornData();
             CleanUpBritannia = new CleanUpBritanniaData();
             ViceVsVirtue = new ViceVsVirtueSystem();
+            TreasuresOfKotlCity = new KotlCityData();
 
             CityLoyaltySystem.ConstructSystems();
+            ArenaSystem = new PVPArenaSystem();
         }
 
         public static void HandleKill(BaseCreature victim, Mobile damager, int index)

@@ -4,6 +4,20 @@ using Server.Mobiles;
 using Server.Multis;
 using Server.Targeting;
 using Server.Engines.VvV;
+using Server.Items;
+using System.Collections.Generic;
+using System.Linq;
+using Server.Spells;
+
+namespace Server.Items
+{
+    public interface IRevealableItem
+    {
+        bool CheckReveal(Mobile m);
+        bool CheckPassiveDetect(Mobile m);
+        void OnRevealed(Mobile m);
+    }
+}
 
 namespace Server.SkillHandlers
 {
@@ -19,10 +33,10 @@ namespace Server.SkillHandlers
             src.SendLocalizedMessage(500819);//Where will you search?
             src.Target = new InternalTarget();
 
-            return TimeSpan.FromSeconds(6.0);
+            return TimeSpan.FromSeconds(10.0);
         }
 
-        private class InternalTarget : Target
+        public class InternalTarget : Target
         {
             public InternalTarget()
                 : base(12, true, TargetFlags.None)
@@ -51,7 +65,7 @@ namespace Server.SkillHandlers
 
                 BaseHouse house = BaseHouse.FindHouseAt(p, src.Map, 16);
 
-                bool inHouse = (house != null && house.IsFriend(src));
+                bool inHouse = house != null && house.IsFriend(src);
 
                 if (inHouse)
                     range = 22;
@@ -66,10 +80,13 @@ namespace Server.SkillHandlers
                         {
                             double ss = srcSkill + Utility.Random(21) - 10;
                             double ts = trg.Skills[SkillName.Hiding].Value + Utility.Random(21) - 10;
+                            double shadow = Server.Spells.SkillMasteries.ShadowSpell.GetDifficultyFactor(trg);
+                            bool houseCheck = inHouse && house.IsInside(trg);
 
-                            if (src.AccessLevel >= trg.AccessLevel && (ss >= ts || (inHouse && house.IsInside(trg))))
+                            if (src.AccessLevel >= trg.AccessLevel && (ss >= ts || houseCheck) && Utility.RandomDouble() > shadow)
                             {
-                                if (trg is ShadowKnight && (trg.X != p.X || trg.Y != p.Y))
+                                if ((trg is ShadowKnight && (trg.X != p.X || trg.Y != p.Y)) ||
+                                    (!houseCheck && !CanDetect(src, trg)))
                                     continue;
 
                                 trg.RevealingAction();
@@ -81,40 +98,24 @@ namespace Server.SkillHandlers
 
                     inRange.Free();
 
-                    bool faction = Faction.Find(src) != null;
-                    bool vvv = ViceVsVirtueSystem.IsVvV(src);
+                    IPooledEnumerable itemsInRange = src.Map.GetItemsInRange(p, range);
 
-                    if (faction || vvv)
+                    foreach (Item item in itemsInRange)
                     {
-                        IPooledEnumerable itemsInRange = src.Map.GetItemsInRange(p, range);
+                        if (item.Visible)
+                            continue;
 
-                        foreach (Item item in itemsInRange)
+                        IRevealableItem dItem = item as IRevealableItem;
+
+                        if (dItem != null && dItem.CheckReveal(src))
                         {
-                            if (faction && item is BaseFactionTrap)
-                            {
-                                BaseFactionTrap trap = (BaseFactionTrap)item;
+                            dItem.OnRevealed(src);
 
-                                if (src.CheckTargetSkill(SkillName.DetectHidden, trap, 80.0, 100.0))
-                                {
-                                    src.SendLocalizedMessage(1042712, true, " " + (trap.Faction == null ? "" : trap.Faction.Definition.FriendlyName)); // You reveal a trap placed by a faction:
-
-                                    trap.Visible = true;
-                                    trap.BeginConceal();
-
-                                    foundAnyone = true;
-                                }
-                            }
-                            else if (vvv && (item is VvVSigil || item is VvVTrap) && Utility.Random(100) <= srcSkill)
-                            {
-                                if (item is VvVTrap && item.ItemID == VvVTrap.HiddenID)
-                                    ((VvVTrap)item).OnRevealed(src);
-                                else if (!item.Visible)
-                                    item.Visible = true;
-                            }
+                            foundAnyone = true;
                         }
-
-                        itemsInRange.Free();
                     }
+
+                    itemsInRange.Free();
                 }
 
                 if (!foundAnyone)
@@ -141,27 +142,45 @@ namespace Server.SkillHandlers
 
             foreach (Mobile m in eable)
             {
-                if (m == null || m is ShadowKnight)
+                if (m == null || m == src || m is ShadowKnight || !CanDetect(src, m))
                     continue;
 
-                int noto = Notoriety.Compute(src, m);
+                double ts = (m.Skills[SkillName.Hiding].Value + m.Skills[SkillName.Stealth].Value) / 2;
 
-                if (m != src && noto != Notoriety.Innocent && noto != Notoriety.Ally && noto != Notoriety.Invulnerable)
+                if (src.Race == Race.Elf)
+                    ss += 20;
+
+                if (src.AccessLevel >= m.AccessLevel && Utility.Random(1000) < (ss - ts) + 1)
                 {
-                    double ts = (m.Skills[SkillName.Hiding].Value + m.Skills[SkillName.Stealth].Value) / 2;
-
-                    if (src.Race == Race.Elf)
-                        ss += 20;
-
-                    if (src.AccessLevel >= m.AccessLevel && Utility.Random(1000) < (ss - ts) + 1)
-                    {
-                        m.RevealingAction();
-                        m.SendLocalizedMessage(500814); // You have been revealed!
-                    }
+                    m.RevealingAction();
+                    m.SendLocalizedMessage(500814); // You have been revealed!
                 }
             }
 
             eable.Free();
+
+            eable = src.Map.GetItemsInRange(src.Location, 8);
+
+            foreach (Item item in eable)
+            {
+                if (!item.Visible && item is IRevealableItem && ((IRevealableItem)item).CheckPassiveDetect(src))
+                {
+                    src.SendLocalizedMessage(1153493); // Your keen senses detect something hidden in the area...
+                }
+            }
+
+            eable.Free();
+        }
+
+        private static bool CanDetect(Mobile src, Mobile target)
+        {
+            if (src.Map == null || src.Blessed || (src is BaseCreature && ((BaseCreature)src).IsInvulnerable))
+                return false;
+
+            if (target.Blessed || (target is BaseCreature && ((BaseCreature)target).IsInvulnerable))
+                return false;
+
+            return src.CanBeHarmful(target, false) && (src.Map.Rules != MapRules.FeluccaRules || SpellHelper.ValidIndirectTarget(src, target));
         }
     }
 }

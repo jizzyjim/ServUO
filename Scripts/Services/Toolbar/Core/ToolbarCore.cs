@@ -1,10 +1,4 @@
-﻿#region Header
-// **********
-// ServUO - ToolbarCore.cs
-// **********
-#endregion
-
-#region References
+﻿#region References
 using System;
 
 using CustomsFramework;
@@ -45,7 +39,7 @@ namespace Services.Toolbar.Core
 
 		public static void OnPlayerDeath(PlayerDeathEventArgs e)
 		{
-			if (e.Mobile.AccessLevel < AccessLevel.VIP)
+			if (e.Mobile.AccessLevel < AccessLevel.VIP || e.Mobile.NetState == null)
 			{
 				return;
 			}
@@ -66,7 +60,7 @@ namespace Services.Toolbar.Core
 			ToolbarModule module = m.GetModule(typeof(ToolbarModule)) as ToolbarModule ?? new ToolbarModule(m);
 
 			m.CloseGump(typeof(ToolbarGump));
-			m.SendGump(new ToolbarGump(module.ToolbarInfo));
+			m.SendGump(new ToolbarGump(module.ToolbarInfo, m));
 		}
 
 		public ToolbarCore()

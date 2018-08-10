@@ -14,25 +14,44 @@ namespace Server.Targets
         public BladedItemTarget(Item item)
             : base(2, false, TargetFlags.None)
         {
-            this.m_Item = item;
+            m_Item = item;
         }
 
         protected override void OnTargetOutOfRange(Mobile from, object targeted)
         {
             if (targeted is UnholyBone && from.InRange(((UnholyBone)targeted), 12))
-                ((UnholyBone)targeted).Carve(from, this.m_Item);
+            {
+                if (((UnholyBone)targeted).Carve(from, m_Item) && Siege.SiegeShard)
+                {
+                    Siege.CheckUsesRemaining(from, m_Item);
+                }
+            }
             else
                 base.OnTargetOutOfRange(from, targeted);
         }
 
         protected override void OnTarget(Mobile from, object targeted)
         {
-            if (this.m_Item.Deleted)
+            if (m_Item.Deleted)
                 return;
 
             if (targeted is ICarvable)
             {
-                ((ICarvable)targeted).Carve(from, this.m_Item);
+                if (targeted is Item)
+                {
+                    Item item = targeted as Item;
+
+                    if (item.IsLockedDown || (item.RootParent is Container && (!item.Movable || !((Container)item.RootParent).LiftOverride)))
+                    {
+                        from.SendLocalizedMessage(500494); // You can't use a bladed item on that!
+                        return;
+                    }
+                }
+
+                if (((ICarvable)targeted).Carve(from, m_Item) && Siege.SiegeShard)
+                {
+                    Siege.CheckUsesRemaining(from, m_Item);
+                }
             }
             else if (targeted is SwampDragon && ((SwampDragon)targeted).HasBarding)
             {
@@ -41,7 +60,14 @@ namespace Server.Targets
                 if (!pet.Controlled || pet.ControlMaster != from)
                     from.SendLocalizedMessage(1053022); // You cannot remove barding from a swamp dragon you do not own.
                 else
+                {
                     pet.HasBarding = false;
+
+                    if (Siege.SiegeShard && m_Item is IUsesRemaining)
+                    {
+                        Siege.CheckUsesRemaining(from, m_Item);
+                    }
+                }
             }
             else
             {
@@ -65,6 +91,12 @@ namespace Server.Targets
                                 {
                                     player.SendLocalizedMessage(1055036); // You slice a red cap mushroom from its stem.
                                     obj.Complete();
+
+                                    if (Siege.SiegeShard && m_Item is IUsesRemaining)
+                                    {
+                                        Siege.CheckUsesRemaining(from, m_Item);
+                                    }
+
                                     return;
                                 }
                             }
@@ -79,7 +111,7 @@ namespace Server.Targets
                 Map map;
                 Point3D loc;
 
-                if (!system.GetHarvestDetails(from, this.m_Item, targeted, out tileID, out map, out loc))
+                if (!system.GetHarvestDetails(from, m_Item, targeted, out tileID, out map, out loc))
                 {
                     from.SendLocalizedMessage(500494); // You can't use a bladed item on that!
                 }
@@ -114,6 +146,11 @@ namespace Server.Targets
                             from.SendLocalizedMessage(500490); // You can't place any kindling into your backpack!
 
                             item.Delete();
+                        }
+
+                        if (Siege.SiegeShard && m_Item is IUsesRemaining)
+                        {
+                            Siege.CheckUsesRemaining(from, m_Item);
                         }
                     }
                 }

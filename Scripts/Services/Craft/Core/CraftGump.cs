@@ -10,7 +10,7 @@ namespace Server.Engines.Craft
     {
         private readonly Mobile m_From;
         private readonly CraftSystem m_CraftSystem;
-        private readonly BaseTool m_Tool;
+        private readonly ITool m_Tool;
 
         private readonly CraftPage m_Page;
 
@@ -27,16 +27,16 @@ namespace Server.Engines.Craft
             PickResource2
         }
 
-        /*public CraftGump( Mobile from, CraftSystem craftSystem, BaseTool tool ): this( from, craftSystem, -1, -1, tool, null )
+        /*public CraftGump( Mobile from, CraftSystem craftSystem, ITool tool ): this( from, craftSystem, -1, -1, tool, null )
         {
         }*/
 
-        public CraftGump(Mobile from, CraftSystem craftSystem, BaseTool tool, object notice)
+        public CraftGump(Mobile from, CraftSystem craftSystem, ITool tool, object notice)
             : this(from, craftSystem, tool, notice, CraftPage.None)
         {
         }
 
-        private CraftGump(Mobile from, CraftSystem craftSystem, BaseTool tool, object notice, CraftPage page)
+        private CraftGump(Mobile from, CraftSystem craftSystem, ITool tool, object notice, CraftPage page)
             : base(40, 40)
         {
             this.m_From = from;
@@ -196,17 +196,17 @@ namespace Server.Engines.Craft
                     }
                 }
 
-                this.AddButton(15, 382, 4005, 4007, GetButtonID(6, 0), GumpButtonType.Reply, 0);
+                this.AddButton(15, 362, 4005, 4007, GetButtonID(6, 0), GumpButtonType.Reply, 0);
 
                 if (nameNumber > 0)
                 {
                     if (context.DoNotColor)
-                        AddLabel(50, 385, LabelHue, "*");
+                        AddLabel(50, 365, LabelHue, "*");
 
-                    AddHtmlLocalized(50 + (context.DoNotColor ? 13 : 0), 385, 250, 18, nameNumber, resourceCount.ToString(), LabelColor, false, false);
+                    AddHtmlLocalized(50 + (context.DoNotColor ? 13 : 0), 365, 250, 18, nameNumber, resourceCount.ToString(), LabelColor, false, false);
                 }
                 else
-                    AddLabel(50, 382, LabelHue, (context.DoNotColor ? "*" : "") + String.Format("{0} ({1} Available)", nameString, resourceCount));
+                    AddLabel(50, 362, LabelHue, (context.DoNotColor ? "*" : "") + String.Format("{0} ({1} Available)", nameString, resourceCount));
             }
             // ****************************************
 
@@ -239,12 +239,12 @@ namespace Server.Engines.Craft
                         resourceCount += items[i].Amount;
                 }
 
-                this.AddButton(15, 402, 4005, 4007, GetButtonID(6, 7), GumpButtonType.Reply, 0);
+                this.AddButton(15, 382, 4005, 4007, GetButtonID(6, 7), GumpButtonType.Reply, 0);
 
                 if (nameNumber > 0)
-                    AddHtmlLocalized(50, 405, 250, 18, nameNumber, resourceCount.ToString(), LabelColor, false, false);
+                    AddHtmlLocalized(50, 385, 250, 18, nameNumber, resourceCount.ToString(), LabelColor, false, false);
                 else
-                    AddLabel(50, 405, LabelHue, String.Format("{0} ({1} Available)", nameString, resourceCount));
+                    AddLabel(50, 385, LabelHue, String.Format("{0} ({1} Available)", nameString, resourceCount));
             }
             // ****************************************
 
@@ -330,12 +330,12 @@ namespace Server.Engines.Craft
                     }
                 }
 
-                this.AddButton(220, 70 + (index * 20), 4005, 4007, GetButtonID(5, i), GumpButtonType.Reply, 0);
+                this.AddButton(220, 60 + (index * 20), 4005, 4007, GetButtonID(5, i), GumpButtonType.Reply, 0);
 
                 if (subResource.NameNumber > 0)
-                    this.AddHtmlLocalized(255, 73 + (index * 20), 250, 18, subResource.NameNumber, resourceCount.ToString(), LabelColor, false, false);
+                    this.AddHtmlLocalized(255, 63 + (index * 20), 250, 18, subResource.NameNumber, resourceCount.ToString(), LabelColor, false, false);
                 else
-                    this.AddLabel(255, 70 + (index * 20), LabelHue, String.Format("{0} ({1})", subResource.NameString, resourceCount));
+                    this.AddLabel(255, 60 + (index * 20), LabelHue, String.Format("{0} ({1})", subResource.NameString, resourceCount));
             }
         }
 
@@ -400,6 +400,10 @@ namespace Server.Engines.Craft
 
             CraftGroupCol craftGroupCol = this.m_CraftSystem.CraftGroups;
             CraftGroup craftGroup = craftGroupCol.GetAt(selectedGroup);
+
+            if (craftGroup == null)
+                return;
+
             CraftItemCol craftItemCol = craftGroup.CraftItems;
 
             for (int i = 0; i < craftItemCol.Count; ++i)
@@ -465,6 +469,12 @@ namespace Server.Engines.Craft
 
         public void CraftItem(CraftItem item)
         {
+            if (item.TryCraft != null)
+            {
+                item.TryCraft(m_From, item, m_Tool);
+                return;
+            }
+
             int num = this.m_CraftSystem.CanCraft(this.m_From, this.m_Tool, item.ItemType);
 
             if (num > 0)

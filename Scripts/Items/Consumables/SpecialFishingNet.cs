@@ -34,7 +34,9 @@ namespace Server.Items
         {
             0x1797, 0x179C
         };
+
         private bool m_InUse;
+
         [Constructable]
         public SpecialFishingNet()
             : base(0x0DCA)
@@ -192,7 +194,15 @@ namespace Server.Items
                 this.MoveToWorld(p, map);
 
                 SpellHelper.Turn(from, p);
-                from.Animate(12, 5, 1, true, false, 0);
+
+                if (Core.SA)
+                {
+                    from.Animate(AnimationType.Attack, 6);
+                }
+                else
+                {
+                    from.Animate(12, 5, 1, true, false, 0);
+                }
 
                 Effects.SendLocationEffect(p, map, 0x352D, 16, 4);
                 Effects.PlaySound(p, map, 0x364);
@@ -290,7 +300,7 @@ namespace Server.Items
             this.Delete();
         }
 
-        private static bool ValidateDeepWater(Map map, int x, int y)
+        public static bool ValidateDeepWater(Map map, int x, int y)
         {
             int tileID = map.Tiles.GetLandTile(x, y).ID;
             bool water = false;
@@ -301,7 +311,7 @@ namespace Server.Items
             return water;
         }
 
-        private static bool ValidateUndeepWater(Map map, object obj, ref int z)
+        public static bool ValidateUndeepWater(Map map, object obj, ref int z)
         {
             if (!(obj is StaticTarget))
                 return false;

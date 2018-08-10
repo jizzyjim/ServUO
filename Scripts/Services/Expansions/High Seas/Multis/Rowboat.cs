@@ -131,12 +131,12 @@ namespace Server.Multis
             }
         }
 
-        public override bool IsComponentItem(ISpawnable item)
+        public override bool IsComponentItem(IEntity item)
         {
             return item == this || item == m_Line || item == m_Rudder || item is RudderHandle;
         }
 
-        public bool HasAccess(Mobile from)
+        public override bool HasAccess(Mobile from)
         {
             if (from.AccessLevel > AccessLevel.Player || this.Owner == null)
                 return true;

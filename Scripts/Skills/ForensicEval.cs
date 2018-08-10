@@ -91,12 +91,15 @@ namespace Server.SkillHandlers
                     else
                         from.SendLocalizedMessage(501003);//You notice nothing unusual.
                 }
-                else if (target is Item)
+                else if (target is Item && Core.SA)
                 {
                     Item item = (Item)target;
 
-                    if (item.HonestyItem && item.HonestyOwner != null)
+                    if (item.HonestyItem)
                     {
+                        if (item.HonestyOwner == null)
+                            Server.Services.Virtues.HonestyVirtue.AssignOwner(item);
+
                         string region = item.HonestyRegion == null ? "an unknown place" : item.HonestyRegion;
 
                         if (from.Skills.Forensics.Value >= 65)
@@ -107,7 +110,10 @@ namespace Server.SkillHandlers
                         {
                             from.SendLocalizedMessage(1151522, region); // You find seeds from a familiar plant stuck to the item which suggests that this item is from ~1_val~.
                         }
-
+                        else
+                        {
+                            from.SendLocalizedMessage(1151536); // You have three hours to turn this item in for Honesty credit, otherwise it will cease to be a quest item.
+                        }
                     }
                 }
             }

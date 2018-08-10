@@ -76,6 +76,11 @@ namespace Server.Items
                 list.Add(1076220); // 4th Year Veteran Reward
         }
 
+        void IChopable.OnChop(Mobile user)
+        {
+            OnDoubleClick(user);
+        }
+
         public override void OnDoubleClick(Mobile from)
         {
             if (from.InRange(this.Location, 2))
@@ -274,7 +279,7 @@ namespace Server.Items
 
             public override void OnResponse(NetState sender, RelayInfo info)
             {
-                if (this.m_Shield == null | this.m_Shield.Deleted)
+                if (this.m_Shield == null || this.m_Shield.Deleted)
                     return;		
 				
                 Mobile m = sender.Mobile;	
@@ -344,7 +349,7 @@ namespace Server.Items
                                     else if (west)
                                         shield = new DecorativeShield(GetWestItemID(this.m_ItemID));
 										
-                                    house.Addons.Add(shield);
+                                    house.Addons[shield] = from;
 
                                     shield.IsRewardItem = this.m_Shield.IsRewardItem;
                                     shield.MoveToWorld(p3d, map);
@@ -416,7 +421,7 @@ namespace Server.Items
 						
                     if (shield != null)
                     {
-                        this.m_House.Addons.Add(shield);
+                        this.m_House.Addons[shield] = sender.Mobile;
 
                         shield.IsRewardItem = this.m_Shield.IsRewardItem;
                         shield.MoveToWorld(this.m_Location, sender.Mobile.Map);

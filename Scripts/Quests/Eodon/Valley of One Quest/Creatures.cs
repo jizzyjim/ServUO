@@ -16,39 +16,41 @@ namespace Server.Mobiles
         public TRex()
             : base(AIType.AI_Melee, FightMode.Weakest, 10, 1, .08, .17)
         {
-            Name = "a tyrannosaurus rex";
+            Name = "Tyrannosaurus Rex";
             Body = 1400;
             BaseSoundID = 362;
 
-            SetStr(986, 1185);
-            SetDex(177, 255);
-            SetInt(151, 250);
+            SetStr(500, 700);
+            SetDex(500, 700);
+            SetInt(100, 180);
 
             SetHits(15000);
 
-            SetDamage(30, 42);
+            SetDamage(33, 55);
 
-            SetDamageType(ResistanceType.Physical, 50);
-            SetDamageType(ResistanceType.Fire, 25);
-            SetDamageType(ResistanceType.Energy, 25);
+            SetDamageType(ResistanceType.Physical, 100);
 
-            SetResistance(ResistanceType.Physical, 65, 80);
+            SetResistance(ResistanceType.Physical, 80, 90);
             SetResistance(ResistanceType.Fire, 60, 80);
-            SetResistance(ResistanceType.Cold, 50, 60);
-            SetResistance(ResistanceType.Poison, 100);
-            SetResistance(ResistanceType.Energy, 40, 50);
+            SetResistance(ResistanceType.Cold, 60, 70);
+            SetResistance(ResistanceType.Poison, 80, 100);
+            SetResistance(ResistanceType.Energy, 60, 70);
 
-            SetSkill(SkillName.Anatomy, 25.1, 50.0);
-            SetSkill(SkillName.MagicResist, 150.0);
-            SetSkill(SkillName.Tactics, 120, 140);
-            SetSkill(SkillName.Wrestling, 140, 150);
+            SetSkill(SkillName.Anatomy, 100.0);
+            SetSkill(SkillName.MagicResist, 140.0, 150.0);
+            SetSkill(SkillName.Tactics, 110.0, 130.0);
+            SetSkill(SkillName.Wrestling, 130.0, 150.0);
+            SetSkill(SkillName.Poisoning, 60.0, 70.0);
+            SetSkill(SkillName.Parry, 100);
 
-            Fame = 35000;
-            Karma = -35000;
+            Fame = 24000;
+            Karma = -24000;
 
             _NextFreeze = DateTime.UtcNow;
 
             CanSwim = true;
+            SetWeaponAbility(WeaponAbility.ArmorIgnore);
+            SetSpecialAbility(SpecialAbility.TailSwipe);
         }
 
         public override bool AutoDispel { get { return true; } }
@@ -56,6 +58,8 @@ namespace Server.Mobiles
         public override bool UseSmartAI { get { return true; } }
         public override bool ReacquireOnMovement { get { return true; } }
         public override bool AttacksFocus { get { return true; } }
+
+        // Missing Tail Swipe Ability
 
         public override void OnThink()
         {
@@ -80,29 +84,29 @@ namespace Server.Mobiles
 
         private bool DoEffects(Direction d)
         {
-            int x = this.X;
-            int y = this.Y;
-            int z = this.Z;
+            int x = X;
+            int y = Y;
+            int z = Z;
             int range = 10;
             int offset = 8;
 
             switch (d)
             {
                 case Direction.North:
-                    x = this.X + Utility.RandomMinMax(-offset, offset);
-                    y = this.Y - range;
+                    x = X + Utility.RandomMinMax(-offset, offset);
+                    y = Y - range;
                     break;
                 case Direction.West:
-                    x = this.X - range;
-                    y = this.Y + Utility.RandomMinMax(-offset, offset);
+                    x = X - range;
+                    y = Y + Utility.RandomMinMax(-offset, offset);
                     break;
                 case Direction.South:
-                    x = this.X + Utility.RandomMinMax(-offset, offset);
-                    y = this.Y + range;
+                    x = X + Utility.RandomMinMax(-offset, offset);
+                    y = Y + range;
                     break;
                 case Direction.East:
-                    x = this.X + range;
-                    y = this.Y + Utility.RandomMinMax(-offset, offset);
+                    x = X + range;
+                    y = Y + Utility.RandomMinMax(-offset, offset);
                     break;
             }
 
@@ -116,10 +120,10 @@ namespace Server.Mobiles
                     case Direction.East: x -= i; break;
                 }
 
-                z = this.Map.GetAverageZ(x, y);
+                z = Map.GetAverageZ(x, y);
                 Point3D p = new Point3D(x, y, z);
 
-                if (Server.Spells.SpellHelper.AdjustField(ref p, this.Map, 12, false))/*this.Map.CanFit(x, y, z, 16, false, false, true))/*this.Map.CanSpawnMobile(x, y, z)*/
+                if (Server.Spells.SpellHelper.AdjustField(ref p, Map, 12, false))/*Map.CanFit(x, y, z, 16, false, false, true))/*Map.CanSpawnMobile(x, y, z)*/
                 {
                     MovementPath path = new MovementPath(this, p);
 
@@ -137,15 +141,15 @@ namespace Server.Mobiles
         private void DropCrack(MovementPath path)
         {
             int time = 10;
-            int x = this.X;
-            int y = this.Y;
+            int x = X;
+            int y = Y;
 
             for (int i = 0; i < path.Directions.Length; ++i)
             {
                 Movement.Movement.Offset(path.Directions[i], ref x, ref y);
-                IPoint3D p = new Point3D(x, y, this.Map.GetAverageZ(x, y)) as IPoint3D;
+                IPoint3D p = new Point3D(x, y, Map.GetAverageZ(x, y)) as IPoint3D;
 
-                Timer.DelayCall(TimeSpan.FromMilliseconds(time), new TimerStateCallback(ManaDrainEffects_Callback), new object[] { p, this.Map });
+                Timer.DelayCall(TimeSpan.FromMilliseconds(time), new TimerStateCallback(ManaDrainEffects_Callback), new object[] { p, Map });
 
                 time += 200;
             }
@@ -160,7 +164,7 @@ namespace Server.Mobiles
             var item = new FreezeItem(Utility.RandomList(6913, 6915, 6917, 6919), this);
             Spells.SpellHelper.GetSurfaceTop(ref p);
 
-            item.MoveToWorld(new Point3D(p), this.Map);
+            item.MoveToWorld(new Point3D(p), Map);
         }
 
         private class FreezeItem : Item
@@ -197,10 +201,10 @@ namespace Server.Mobiles
 
             public override void OnLocationChange(Point3D oldLocation)
             {
-                Static = new Static(this.ItemID + 1);
-                Static.MoveToWorld(this.Location, this.Map);
+                Static = new Static(ItemID + 1);
+                Static.MoveToWorld(Location, Map);
 
-                IPooledEnumerable eable = this.Map.GetMobilesInRange(this.Location, 0);
+                IPooledEnumerable eable = Map.GetMobilesInRange(Location, 0);
 
                 foreach (Mobile m in eable)
                 {
@@ -378,7 +382,7 @@ namespace Server.Mobiles
                 switch(Utility.Random(3))
                 {
                     case 0:
-                        IPooledEnumerable eable = this.Map.GetMobilesInRange(this.Location, 10);
+                        IPooledEnumerable eable = Map.GetMobilesInRange(Location, 10);
 
                         foreach (Mobile m in eable)
                         {
@@ -398,16 +402,16 @@ namespace Server.Mobiles
 
                         _LastTeleport = ran;
                         Point3D p = _TeleList[ran];
-                        Point3D old = this.Location;
+                        Point3D old = Location;
 
-                        MoveToWorld(p, this.Map);
+                        MoveToWorld(p, Map);
                         ProcessDelta();
 
-                        Effects.SendLocationParticles(EffectItem.Create(old, this.Map, EffectItem.DefaultDuration), 0x3728, 10, 10, 2023);
-                        Effects.SendLocationParticles(EffectItem.Create(p, this.Map, EffectItem.DefaultDuration), 0x3728, 10, 10, 5023);
+                        Effects.SendLocationParticles(EffectItem.Create(old, Map, EffectItem.DefaultDuration), 0x3728, 10, 10, 2023);
+                        Effects.SendLocationParticles(EffectItem.Create(p, Map, EffectItem.DefaultDuration), 0x3728, 10, 10, 5023);
                         break;
                     case 2:
-                        IPooledEnumerable eable2 = this.Map.GetMobilesInRange(this.Location, 10);
+                        IPooledEnumerable eable2 = Map.GetMobilesInRange(Location, 10);
                         List<Mobile> mobiles = new List<Mobile>();
 
                         foreach (Mobile m in eable2)
@@ -424,11 +428,11 @@ namespace Server.Mobiles
                             Point3D old2 = m.Location;
                             Point3D p2 = _PlayerTeleList[Utility.Random(_PlayerTeleList.Length)];
 
-                            m.MoveToWorld(p2, this.Map);
+                            m.MoveToWorld(p2, Map);
                             m.ProcessDelta();
 
-                            Effects.SendLocationParticles(EffectItem.Create(old2, this.Map, EffectItem.DefaultDuration), 0x3728, 10, 10, 2023);
-                            Effects.SendLocationParticles(EffectItem.Create(p2, this.Map, EffectItem.DefaultDuration), 0x3728, 10, 10, 5023);
+                            Effects.SendLocationParticles(EffectItem.Create(old2, Map, EffectItem.DefaultDuration), 0x3728, 10, 10, 2023);
+                            Effects.SendLocationParticles(EffectItem.Create(p2, Map, EffectItem.DefaultDuration), 0x3728, 10, 10, 5023);
                         }
 
                         ColUtility.Free(mobiles);
@@ -442,7 +446,7 @@ namespace Server.Mobiles
 
                 if (barrel >= 0)
                 {
-                    IPooledEnumerable eable = this.Map.GetMobilesInRange(this.Location, 10);
+                    IPooledEnumerable eable = Map.GetMobilesInRange(Location, 10);
                     List<Mobile> mobiles = new List<Mobile>();
 
                     foreach (Mobile m in eable)
@@ -458,7 +462,7 @@ namespace Server.Mobiles
                         Mobile m = mobiles[Utility.Random(mobiles.Count)];
                         DoHarmful(m);
 
-                        this.MovingParticles(m, barrel, 10, 0, false, true, 0, 0, 9502, 6014, 0x11D, EffectLayer.Waist, 0);
+                        MovingParticles(m, barrel, 10, 0, false, true, 0, 0, 9502, 6014, 0x11D, EffectLayer.Waist, 0);
 
                         Timer.DelayCall(TimeSpan.FromSeconds(1), () =>
                         {
@@ -474,8 +478,8 @@ namespace Server.Mobiles
 
         public void DoDismount(Mobile m)
         {
-            this.MovingParticles(m, 0x36D4, 7, 0, false, true, 9502, 4019, 0x160);
-            this.PlaySound(0x15E);
+            MovingParticles(m, 0x36D4, 7, 0, false, true, 9502, 4019, 0x160);
+            PlaySound(0x15E);
 
             double range = m.GetDistanceToSqrt(this);
 
@@ -503,7 +507,7 @@ namespace Server.Mobiles
 
         public int CheckBarrel()
         {
-            IPooledEnumerable eable = this.Map.GetItemsInRange(this.Location, 2);
+            IPooledEnumerable eable = Map.GetItemsInRange(Location, 2);
             List<Item> items = new List<Item>();
 
             foreach (Item item in eable)
@@ -608,7 +612,7 @@ namespace Server.Mobiles
             }
         }
 
-        public override void Damage(int amount, Mobile from, bool informMount, bool checkfizzle)
+        public override int Damage(int amount, Mobile from, bool informMount, bool checkfizzle)
         {
             if(from is BaseCreature)
                 from = ((BaseCreature)from).GetMaster();
@@ -616,10 +620,10 @@ namespace Server.Mobiles
             if (from is PlayerMobile)
             {
                 PrivateOverheadMessage(Server.Network.MessageType.Regular, 0x35, 1156500, from.NetState); // *The cub looks at you playfully. Your attack fails as you are overwhelmed by its cuteness*
-                return;
+                return 0;
             }
 
-            base.Damage(amount, from, informMount, checkfizzle);
+            return base.Damage(amount, from, informMount, checkfizzle);
         }
 
         public override int Meat { get { return 1; } }
@@ -650,8 +654,6 @@ namespace Server.Mobiles
 
     public class Trapper : Brigand
     {
-        private DateTime _Deletes;
-
         [Constructable]
         public Trapper()
         {
@@ -758,34 +760,34 @@ namespace Server.Mobiles
         public VolcanoElemental()
             : base(AIType.AI_Melee, FightMode.Closest, 10, 1, 0.2, 0.4)
         {
-            this.Name = "a volcano elemental";
-            this.Body = 15; 
-            this.Hue = 2726;
+            Name = "a volcano elemental";
+            Body = 15; 
+            Hue = 2726;
 
-            this.SetStr(446, 510);
-            this.SetDex(173, 191);
-            this.SetInt(369, 397);
+            SetStr(446, 510);
+            SetDex(173, 191);
+            SetInt(369, 397);
 
-            this.SetHits(800, 1200);
+            SetHits(800, 1200);
 
-            this.SetDamage(18, 24);
+            SetDamage(18, 24);
 
-            this.SetDamageType(ResistanceType.Physical, 10);
-            this.SetDamageType(ResistanceType.Fire, 90);
+            SetDamageType(ResistanceType.Physical, 10);
+            SetDamageType(ResistanceType.Fire, 90);
 
-            this.SetResistance(ResistanceType.Physical, 60, 70);
-            this.SetResistance(ResistanceType.Fire, 20, 30);
-            this.SetResistance(ResistanceType.Cold, 20, 30);
-            this.SetResistance(ResistanceType.Poison, 100);
-            this.SetResistance(ResistanceType.Energy, 40, 50);
+            SetResistance(ResistanceType.Physical, 60, 70);
+            SetResistance(ResistanceType.Fire, 20, 30);
+            SetResistance(ResistanceType.Cold, 20, 30);
+            SetResistance(ResistanceType.Poison, 100);
+            SetResistance(ResistanceType.Energy, 40, 50);
 
-            this.SetSkill(SkillName.Anatomy, 0.0, 12.8);
-            this.SetSkill(SkillName.EvalInt, 84.8, 92.6);
-            this.SetSkill(SkillName.Magery, 90.1, 92.7);
-            this.SetSkill(SkillName.Meditation, 97.8, 102.8);
-            this.SetSkill(SkillName.MagicResist, 101.9, 106.2);
-            this.SetSkill(SkillName.Tactics, 80.3, 94.0);
-            this.SetSkill(SkillName.Wrestling, 71.7, 85.4);
+            SetSkill(SkillName.Anatomy, 0.0, 12.8);
+            SetSkill(SkillName.EvalInt, 84.8, 92.6);
+            SetSkill(SkillName.Magery, 90.1, 92.7);
+            SetSkill(SkillName.Meditation, 97.8, 102.8);
+            SetSkill(SkillName.MagicResist, 101.9, 106.2);
+            SetSkill(SkillName.Tactics, 80.3, 94.0);
+            SetSkill(SkillName.Wrestling, 71.7, 85.4);
 
             Fame = 12500;
             Karma = -12500;
@@ -793,9 +795,9 @@ namespace Server.Mobiles
 
         public override void GenerateLoot()
         {
-            this.AddLoot(LootPack.FilthyRich, 3);
-            this.AddLoot(LootPack.Gems, 2);
-            this.AddLoot(LootPack.MedScrolls);
+            AddLoot(LootPack.FilthyRich, 3);
+            AddLoot(LootPack.Gems, 2);
+            AddLoot(LootPack.MedScrolls);
         }
 
         public VolcanoElemental(Serial serial)

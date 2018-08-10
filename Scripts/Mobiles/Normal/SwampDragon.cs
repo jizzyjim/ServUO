@@ -21,38 +21,38 @@ namespace Server.Mobiles
         public SwampDragon(string name)
             : base(name, 0x31A, 0x3EBD, AIType.AI_Melee, FightMode.Aggressor, 10, 1, 0.2, 0.4)
         {
-            this.BaseSoundID = 0x16A;
+            BaseSoundID = 0x16A;
 
-            this.SetStr(201, 300);
-            this.SetDex(66, 85);
-            this.SetInt(61, 100);
+            SetStr(201, 300);
+            SetDex(66, 85);
+            SetInt(61, 100);
 
-            this.SetHits(121, 180);
+            SetHits(121, 180);
 
-            this.SetDamage(3, 4);
+            SetDamage(3, 4);
 
-            this.SetDamageType(ResistanceType.Physical, 75);
-            this.SetDamageType(ResistanceType.Poison, 25);
+            SetDamageType(ResistanceType.Physical, 75);
+            SetDamageType(ResistanceType.Poison, 25);
 
-            this.SetResistance(ResistanceType.Physical, 35, 40);
-            this.SetResistance(ResistanceType.Fire, 20, 30);
-            this.SetResistance(ResistanceType.Cold, 20, 40);
-            this.SetResistance(ResistanceType.Poison, 20, 30);
-            this.SetResistance(ResistanceType.Energy, 30, 40);
+            SetResistance(ResistanceType.Physical, 35, 40);
+            SetResistance(ResistanceType.Fire, 20, 30);
+            SetResistance(ResistanceType.Cold, 20, 40);
+            SetResistance(ResistanceType.Poison, 20, 30);
+            SetResistance(ResistanceType.Energy, 30, 40);
 
-            this.SetSkill(SkillName.Anatomy, 45.1, 55.0);
-            this.SetSkill(SkillName.MagicResist, 45.1, 55.0);
-            this.SetSkill(SkillName.Tactics, 45.1, 55.0);
-            this.SetSkill(SkillName.Wrestling, 45.1, 55.0);
+            SetSkill(SkillName.Anatomy, 45.1, 55.0);
+            SetSkill(SkillName.MagicResist, 45.1, 55.0);
+            SetSkill(SkillName.Tactics, 45.1, 55.0);
+            SetSkill(SkillName.Wrestling, 45.1, 55.0);
 
-            this.Fame = 2000;
-            this.Karma = -2000;
+            Fame = 2000;
+            Karma = -2000;
 
-            this.Hue = 0x851;
+            Hue = 0x851;
 
-            this.Tamable = true;
-            this.ControlSlots = 1;
-            this.MinTameSkill = 93.9;
+            Tamable = true;
+            ControlSlots = 1;
+            MinTameSkill = 93.9;
         }
 
         public SwampDragon(Serial serial)
@@ -65,12 +65,12 @@ namespace Server.Mobiles
         {
             get
             {
-                return this.m_BardingCrafter;
+                return m_BardingCrafter;
             }
             set
             {
-                this.m_BardingCrafter = value;
-                this.InvalidateProperties();
+                m_BardingCrafter = value;
+                InvalidateProperties();
             }
         }
         [CommandProperty(AccessLevel.GameMaster)]
@@ -78,12 +78,12 @@ namespace Server.Mobiles
         {
             get
             {
-                return this.m_BardingExceptional;
+                return m_BardingExceptional;
             }
             set
             {
-                this.m_BardingExceptional = value;
-                this.InvalidateProperties();
+                m_BardingExceptional = value;
+                InvalidateProperties();
             }
         }
         [CommandProperty(AccessLevel.GameMaster)]
@@ -91,12 +91,12 @@ namespace Server.Mobiles
         {
             get
             {
-                return this.m_BardingHP;
+                return m_BardingHP;
             }
             set
             {
-                this.m_BardingHP = value;
-                this.InvalidateProperties();
+                m_BardingHP = value;
+                InvalidateProperties();
             }
         }
         [CommandProperty(AccessLevel.GameMaster)]
@@ -104,26 +104,26 @@ namespace Server.Mobiles
         {
             get
             {
-                return this.m_HasBarding;
+                return m_HasBarding;
             }
             set
             {
-                this.m_HasBarding = value;
+                m_HasBarding = value;
 
-                if (this.m_HasBarding)
+                if (m_HasBarding)
                 {
-                    this.Hue = CraftResources.GetHue(this.m_BardingResource);
-                    this.BodyValue = 0x31F;
-                    this.ItemID = 0x3EBE;
+                    Hue = CraftResources.GetHue(m_BardingResource);
+                    BodyValue = 0x31F;
+                    ItemID = 0x3EBE;
                 }
                 else
                 {
-                    this.Hue = 0x851;
-                    this.BodyValue = 0x31A;
-                    this.ItemID = 0x3EBD;
+                    Hue = 0x851;
+                    BodyValue = 0x31A;
+                    ItemID = 0x3EBD;
                 }
 
-                this.InvalidateProperties();
+                InvalidateProperties();
             }
         }
         [CommandProperty(AccessLevel.GameMaster)]
@@ -131,16 +131,16 @@ namespace Server.Mobiles
         {
             get
             {
-                return this.m_BardingResource;
+                return m_BardingResource;
             }
             set
             {
-                this.m_BardingResource = value;
+                m_BardingResource = value;
 
-                if (this.m_HasBarding)
-                    this.Hue = CraftResources.GetHue(value);
+                if (m_HasBarding)
+                    Hue = CraftResources.GetHue(value);
 
-                this.InvalidateProperties();
+                InvalidateProperties();
             }
         }
         [CommandProperty(AccessLevel.GameMaster)]
@@ -148,9 +148,55 @@ namespace Server.Mobiles
         {
             get
             {
-                return this.m_BardingExceptional ? 2500 : 1000;
+                switch (m_BardingResource)
+                {
+                    default:
+                        return BardingExceptional ? 12000 : 10000;
+                    case CraftResource.DullCopper:
+                    case CraftResource.Valorite:
+                        return BardingExceptional ? 14500 : 12500;
+                    case CraftResource.ShadowIron:
+                        return BardingExceptional ? 17000 : 15000;
+                }
             }
         }
+
+        private int CalculateBardingResistance(ResistanceType type)
+        {
+            if (m_BardingResource == CraftResource.None || !m_HasBarding)
+                return 0;
+
+            CraftResourceInfo resInfo = CraftResources.GetInfo(m_BardingResource);
+
+            if (resInfo == null)
+                return 0;
+
+            CraftAttributeInfo attrs = resInfo.AttributeInfo;
+
+            if (attrs == null)
+                return 0;
+
+            int expBonus = BardingExceptional ? 1 : 0;
+            int resBonus = 0;
+            
+            switch (type)
+            {
+                default:
+                case ResistanceType.Physical: resBonus = Math.Max(5, attrs.ArmorPhysicalResist); break;
+                case ResistanceType.Fire: resBonus = Math.Max(3, attrs.ArmorFireResist); break;
+                case ResistanceType.Cold: resBonus = Math.Max(2, attrs.ArmorColdResist); break;
+                case ResistanceType.Poison: resBonus = Math.Max(3, attrs.ArmorPoisonResist); break;
+                case ResistanceType.Energy: resBonus = Math.Max(2, attrs.ArmorEnergyResist); break;
+            }
+
+            return (resBonus + expBonus) * 5;
+        }
+
+        public override int GetResistance(ResistanceType type)
+        {
+            return base.GetResistance(type) + CalculateBardingResistance(type);
+        }
+
         public override bool ReacquireOnMovement
         {
             get
@@ -162,7 +208,7 @@ namespace Server.Mobiles
         {
             get
             {
-                return !this.Controlled;
+                return !Controlled;
             }
         }
         public override FoodType FavoriteFood
@@ -234,6 +280,16 @@ namespace Server.Mobiles
 
         public override double GetControlChance(Mobile m, bool useBaseSkill)
         {
+            if (PetTrainingHelper.Enabled)
+            {
+                var profile = PetTrainingHelper.GetAbilityProfile(this);
+
+                if (profile != null && profile.HasCustomized())
+                {
+                    return base.GetControlChance(m, useBaseSkill);
+                }
+            }
+
             return 1.0;
         }
 
@@ -241,8 +297,15 @@ namespace Server.Mobiles
         {
             base.GetProperties(list);
 
-            if (this.m_HasBarding && this.m_BardingExceptional && this.m_BardingCrafter != null)
-                list.Add(1060853, this.m_BardingCrafter.Name); // armor exceptionally crafted by ~1_val~
+            if (m_HasBarding && m_BardingExceptional && m_BardingCrafter != null)
+            {
+                list.Add(1060853, m_BardingCrafter.Name); // armor exceptionally crafted by ~1_val~
+            }
+
+            if (m_HasBarding)
+            {
+                list.Add(1115719, m_BardingHP.ToString()); // armor points: ~1_val~
+            }
         }
 
         public override void Serialize(GenericWriter writer)
@@ -251,11 +314,11 @@ namespace Server.Mobiles
 
             writer.Write((int)1); // version
 
-            writer.Write((bool)this.m_BardingExceptional);
-            writer.Write((Mobile)this.m_BardingCrafter);
-            writer.Write((bool)this.m_HasBarding);
-            writer.Write((int)this.m_BardingHP);
-            writer.Write((int)this.m_BardingResource);
+            writer.Write((bool)m_BardingExceptional);
+            writer.Write((Mobile)m_BardingCrafter);
+            writer.Write((bool)m_HasBarding);
+            writer.Write((int)m_BardingHP);
+            writer.Write((int)m_BardingResource);
         }
 
         public override void Deserialize(GenericReader reader)
@@ -264,24 +327,24 @@ namespace Server.Mobiles
 
             int version = reader.ReadInt();
 
-            switch ( version )
+            switch (version)
             {
                 case 1:
                     {
-                        this.m_BardingExceptional = reader.ReadBool();
-                        this.m_BardingCrafter = reader.ReadMobile();
-                        this.m_HasBarding = reader.ReadBool();
-                        this.m_BardingHP = reader.ReadInt();
-                        this.m_BardingResource = (CraftResource)reader.ReadInt();
+                        m_BardingExceptional = reader.ReadBool();
+                        m_BardingCrafter = reader.ReadMobile();
+                        m_HasBarding = reader.ReadBool();
+                        m_BardingHP = reader.ReadInt();
+                        m_BardingResource = (CraftResource)reader.ReadInt();
                         break;
                     }
             }
 
-            if (this.Hue == 0 && !this.m_HasBarding)
-                this.Hue = 0x851;
+            if (Hue == 0 && !m_HasBarding)
+                Hue = 0x851;
 
-            if (this.BaseSoundID == -1)
-                this.BaseSoundID = 0x16A;
+            if (BaseSoundID == -1)
+                BaseSoundID = 0x16A;
         }
     }
 }

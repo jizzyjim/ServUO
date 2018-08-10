@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+using Server.Services.Virtues;
+
 namespace Server.Spells.Spellweaving
 {
     public class AttuneWeaponSpell : ArcanistSpell
@@ -75,6 +77,11 @@ namespace Server.Spells.Spellweaving
             else if (!this.Caster.CanBeginAction(typeof(AttuneWeaponSpell)))
             {
                 this.Caster.SendLocalizedMessage(1075124); // You must wait before casting that spell again.
+                return false;
+            }
+            else if (SpiritualityVirtue.IsEmbracee(Caster))
+            {
+                Caster.SendLocalizedMessage(1156040); // You may not cast Attunement whilst a Spirituality Shield is active!
                 return false;
             }
 

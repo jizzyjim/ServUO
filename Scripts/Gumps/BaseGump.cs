@@ -17,6 +17,8 @@ namespace Server.Gumps
         public PlayerMobile User { get; private set; }
         public bool Open { get; set; }
 
+        public virtual bool CloseOnMapChange { get { return false; } }
+
         public Gump Parent 
         {
             get { return _Parent; }
@@ -70,7 +72,7 @@ namespace Server.Gumps
             return gump;
         }
 
-        public void SendGump()
+        public virtual void SendGump()
         {
             AddGumpLayout();
             Open = true;
@@ -84,6 +86,12 @@ namespace Server.Gumps
 
             Children = null;
             Parent = null;
+
+            OnDispose();
+        }
+
+        public virtual void OnDispose()
+        {
         }
 
         public abstract void AddGumpLayout();
@@ -179,41 +187,87 @@ namespace Server.Gumps
         {
             User.CloseGump(this.GetType());
         }
+        
+        public static T GetGump<T>(PlayerMobile pm, Func<T, bool> predicate) where T : Gump
+        {
+            return EnumerateGumps<T>(pm).FirstOrDefault(x => predicate == null || predicate(x));
+        }
+
+        public static IEnumerable<T> EnumerateGumps<T>(PlayerMobile pm, Func<T, bool> predicate = null) where T : Gump
+        {
+            var ns = pm.NetState;
+
+            if (ns == null)
+                yield break;
+
+            foreach (BaseGump gump in ns.Gumps.OfType<BaseGump>().Where(g => g.GetType() == typeof(T) && 
+                (predicate == null || predicate(g as T))))
+            {
+                yield return gump as T;
+            }
+        }
+
+        public static List<T> GetGumps<T>(PlayerMobile pm) where T : Gump
+        {
+            var ns = pm.NetState;
+            List<T> list = new List<T>();
+
+            if (ns == null)
+                return list;
+
+            foreach (BaseGump gump in ns.Gumps.OfType<BaseGump>().Where(g => g.GetType() == typeof(T)))
+            {
+                list.Add(gump as T);
+            }
+
+            return list;
+        }
+
+        public static List<BaseGump> GetGumps(PlayerMobile pm, bool checkOpen = false)
+        {
+            var ns = pm.NetState;
+            List<BaseGump> list = new List<BaseGump>();
+
+            if (ns == null)
+                return list;
+
+            foreach (BaseGump gump in ns.Gumps.OfType<BaseGump>().Where(g => (!checkOpen || g.Open)))
+            {
+                list.Add(gump);
+            }
+
+            return list;
+        }
+
+        public static void CheckCloseGumps(PlayerMobile pm, bool checkOpen = false)
+        {
+            var ns = pm.NetState;
+
+            if (ns != null)
+            {
+                var gumps = GetGumps(pm, checkOpen);
+
+                foreach (BaseGump gump in gumps.Where(g => g.CloseOnMapChange))
+                {
+                    pm.CloseGump(gump.GetType());
+                }
+
+                ColUtility.Free(gumps);
+            }
+        }
 
         public new void AddItemProperty(Item item)
         {
-            if (item == null || item.Deleted)
-            {
-                return;
-            }
+            item.SendPropertiesTo(User);
 
-            if (User.NetState != null)
-            {
-                ObjectPropertyList opl = item.PropertyList;
-                item.GetProperties(opl);
-
-                User.Send(opl);
-            }
-
-            AddItemProperty(item.Serial);
+            base.AddItemProperty(item);
         }
 
-        public void AddItemProperty(Mobile mob)
+        public void AddMobileProperty(Mobile mob)
         {
-            if (mob == null || mob.Deleted)
-            {
-                return;
-            }
+            mob.SendPropertiesTo(User);
 
-            if (User.NetState != null)
-            {
-                ObjectPropertyList opl = mob.PropertyList;
-                mob.GetProperties(opl);
-
-                User.Send(opl);
-            }
-
-            AddItemProperty(mob.Serial);
+            base.AddItemProperty(mob.Serial.Value);
         }
 
         #region Formatting
@@ -251,7 +305,7 @@ namespace Server.Gumps
 
         protected string ColorAndCenter(string color, string str)
         {
-            return String.Format("<basefont color={0}><center>{1}</center>", color, str);
+            return String.Format("<center><basefont color={0}>{1}</center>", color, str);
         }
 
         protected string ColorAndSize(string color, int size, string str)

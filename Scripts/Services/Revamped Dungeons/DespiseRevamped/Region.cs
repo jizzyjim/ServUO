@@ -63,9 +63,13 @@ namespace Server.Engines.Despise
 			if(m is DespiseBoss)
 			{
 				DespiseController controller = DespiseController.Instance;
-				
-				if(controller != null && controller.Boss == m)
-					controller.OnBossSlain();
+
+                if (controller != null && controller.Boss == m)
+                {
+                    Server.Engines.Quests.WhisperingWithWispsQuest.OnBossSlain((DespiseBoss)m);
+
+                    controller.OnBossSlain();
+                }
 			}
 			else if(m is PlayerMobile && m_LowerLevel)
 			{
@@ -140,7 +144,7 @@ namespace Server.Engines.Despise
                                 topdam.Progress += dc.Power;
 
                                 if (topdam.Power > power && master != null)
-                                    master.SendLocalizedMessage(1153293, topdam.Name); // ~1_NAME~ is growing in strength.
+                                    master.SendLocalizedMessage(1153294, topdam.Name); // ~1_NAME~ has achieved a new threshold in power!
                             }
                             else if (master != null)
                                 master.SendLocalizedMessage(1153309); // Your controlled creature cannot gain further power.
@@ -150,18 +154,25 @@ namespace Server.Engines.Despise
                                 topdam.MaxPower = 15;
 
                                 if (master != null)
-                                    master.SendLocalizedMessage(1153294, topdam.Name); // ~1_NAME~ has achieved a new threshold in power!
+                                    master.SendLocalizedMessage(1153293, topdam.Name); // ~1_NAME~ is growing in strength.
 
                                 topdam.Delta(MobileDelta.Noto);
 
                                 topdam.FixedEffect(0x373A, 10, 30);
                                 topdam.PlaySound(0x209);
                             }
+
+                            if (master != null && master.Backpack != null)
+                            {
+                                var heart = new PutridHeart(Utility.RandomMinMax(dc.Power * 8, dc.Power * 10));
+
+                                if (!master.Backpack.TryDropItem(master, heart, false))
+                                {
+                                    heart.MoveToWorld(master.Location, master.Map);
+                                }
+                            }
                         }
                     }
-
-                    int amount = Utility.RandomMinMax(dc.Power * 8, dc.Power * 10);
-                    dc.PackItem(new PutridHeart(amount));
 				}
 			}
 			
@@ -172,6 +183,17 @@ namespace Server.Engines.Despise
         {
             if (o is BallOfSummoning || o is BraceletOfBinding)
                 return false;
+
+            if (o is Corpse && m.AccessLevel == AccessLevel.Player)
+            {
+                Corpse c = o as Corpse;
+
+                if (c.Owner == null || c.Owner is DespiseCreature)
+                {
+                    m.SendLocalizedMessage(1152684); // There is no loot on the corpse.
+                    return false;
+                }
+            }
 
             return base.OnDoubleClick(m, o);
         }
@@ -215,8 +237,10 @@ namespace Server.Engines.Despise
             if (m.AccessLevel > AccessLevel.Player)
                 return;
 
-            if (!IsInStartRegion(m.Location) && m is BaseCreature && !(m is DespiseCreature) && !(m is CorruptedWisp) && !(m is EnsorcledWisp) && ((BaseCreature)m).Controlled)
-                KickFromRegion(m, false);
+            if (!IsInStartRegion(m.Location) && m is BaseCreature && !(m is DespiseCreature) && !(m is CorruptedWisp) && !(m is EnsorcledWisp) && (((BaseCreature)m).Controlled || ((BaseCreature)m).Summoned))
+            {
+                KickPet(m);
+            }
 
             if (m is PlayerMobile && IsInLowerRegion(m.Location))
             {
@@ -229,10 +253,32 @@ namespace Server.Engines.Despise
 
         public override void OnLocationChanged(Mobile m, Point3D oldLocation)
         {
-            if (!IsInStartRegion(m.Location) && m is BaseCreature && !(m is DespiseCreature) && !(m is CorruptedWisp) && !(m is EnsorcledWisp) && ((BaseCreature)m).Controlled)
-                KickFromRegion(m, false);
+            Timer.DelayCall(TimeSpan.FromSeconds(1.5), () =>
+            {
+                if (!IsInStartRegion(m.Location) && m is BaseCreature && !(m is DespiseCreature) && !(m is CorruptedWisp) && !(m is EnsorcledWisp) && (((BaseCreature)m).Controlled || ((BaseCreature)m).Summoned))
+                {
+                    if (((BaseCreature)m).Summoned)
+                        m.Delete();
+                    else
+                        KickFromRegion(m, false);
+                }
+            });
 
             base.OnLocationChanged(m, oldLocation);
+        }
+
+        private void KickPet(Mobile m)
+        {
+            Timer.DelayCall<BaseCreature>(TimeSpan.FromSeconds(0.5), bc =>
+            {
+                if (bc.Summoned)
+                    bc.Delete();
+                else
+                    KickFromRegion(bc, false);
+
+                if (bc.GetMaster() != null)
+                    bc.GetMaster().SendLocalizedMessage(bc.Summoned ? 1153193 : 1153192); // Your pet has been teleported outside the Despise dungeon entrance.
+            }, (BaseCreature)m);
         }
 
         public void Kick_Callback(object o)

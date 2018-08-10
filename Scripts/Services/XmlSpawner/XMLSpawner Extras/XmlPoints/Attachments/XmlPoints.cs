@@ -15,6 +15,7 @@ using Server.Regions;
 using Server.Spells;
 using Server.Commands;
 using Server.Commands.Generic;
+using Server.Services.Virtues;
 
 namespace Server.Engines.XmlSpawner2
 {
@@ -174,13 +175,18 @@ namespace Server.Engines.XmlSpawner2
 			int duelrange = duelloc.DuelRange;
 
 			if(duelloc.DuelRange <= 0) duelrange = 16;
+            IPooledEnumerable eable = duelloc.DuelMap.GetMobilesInRange(duelloc.DuelLocation, duelrange);
 
-			foreach(Mobile m in duelloc.DuelMap.GetMobilesInRange(duelloc.DuelLocation, duelrange))
+			foreach(Mobile m in eable)
 			{
-				if(m.Player)
-					return false;
+                if (m.Player)
+                {
+                    eable.Free();
+                    return false;
+                }
 			}
-			
+
+            eable.Free();
 			return true;
 		}
 		
@@ -1346,14 +1352,14 @@ namespace Server.Engines.XmlSpawner2
 
 			// uncomment the code below if you want to restrict challenges to towns only
 			/*
-			if (!from.Region.IsPartOf(typeof(Regions.TownRegion)) || !target.Region.IsPartOf(typeof(Regions.TownRegion)))
+			if (!from.Region.IsPartOf<Regions.TownRegion>() || !target.Region.IsPartOf<Regions.TownRegion>())
 			{
 				from.SendMessage("You must be in a town to issue a challenge"); 
 				return false;
 			}
 			*/
 
-			if (from.Region.IsPartOf(typeof(Regions.Jail)) || target.Region.IsPartOf(typeof(Regions.Jail)))
+			if (from.Region.IsPartOf<Regions.Jail>() || target.Region.IsPartOf<Regions.Jail>())
 			{
 				from.SendLocalizedMessage(1042632); // You'll need a better jailbreak plan then that!
 				return false;
@@ -2044,20 +2050,27 @@ namespace Server.Engines.XmlSpawner2
 				// if there were nearby pets/mounts then tele those as well
 
 				ArrayList petlist = new ArrayList();
-				foreach(Mobile m in killer.GetMobilesInRange(16))
+                IPooledEnumerable eable = killer.GetMobilesInRange(16);
+
+				foreach(Mobile m in eable)
 				{
 					if(m is BaseCreature && ((BaseCreature)m).ControlMaster == killer)
 					{
 						petlist.Add(m);
 					}
 				}
-				foreach(Mobile m in killed.GetMobilesInRange(16))
+
+                eable.Free();
+                eable = killed.GetMobilesInRange(16);
+
+				foreach(Mobile m in eable)
 				{
 					if(m is BaseCreature && ((BaseCreature)m).ControlMaster == killed)
 					{
 						petlist.Add(m);
 					}
 				}
+                eable.Free();
 				
 				// port the pets
 				foreach(Mobile m in petlist)

@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - SavageShaman.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections;
@@ -23,14 +17,8 @@ namespace Server.Mobiles
 		{
 			Name = NameList.RandomName("savage shaman");
 
-			if (Utility.RandomBool())
-			{
-				Body = 184;
-			}
-			else
-			{
-				Body = 183;
-			}
+			Female = true;
+			Body = 186;
 
 			SetStr(126, 145);
 			SetDex(91, 110);
@@ -79,7 +67,15 @@ namespace Server.Mobiles
 		public override int Meat { get { return 1; } }
 		public override bool AlwaysMurderer { get { return true; } }
 		public override bool ShowFameTitle { get { return false; } }
-		public override OppositionGroup OppositionGroup { get { return OppositionGroup.SavagesAndOrcs; } }
+        public override TribeType Tribe { get { return TribeType.Savage; } }
+
+        public override OppositionGroup OppositionGroup
+        {
+            get
+            {
+                return OppositionGroup.SavagesAndOrcs;
+            }
+        }
 
 		public override void GenerateLoot()
 		{
@@ -143,14 +139,16 @@ namespace Server.Mobiles
 			}
 
 			ArrayList list = new ArrayList();
+            IPooledEnumerable eable = GetMobilesInRange(8);
 
-			foreach (Mobile m in GetMobilesInRange(8))
+			foreach (Mobile m in eable)
 			{
 				if (m != this && m is SavageShaman)
 				{
 					list.Add(m);
 				}
 			}
+            eable.Free();
 
 			Animate(111, 5, 1, true, false, 0); // Do a little dance...
 
@@ -185,11 +183,13 @@ namespace Server.Mobiles
 			}
 
 			ArrayList list = new ArrayList();
+            IPooledEnumerable eable = GetMobilesInRange(8);
 
-			foreach (Mobile m in GetMobilesInRange(8))
+			foreach (Mobile m in eable)
 			{
 				list.Add(m);
 			}
+            eable.Free();
 
 			if (list.Count > 0)
 			{

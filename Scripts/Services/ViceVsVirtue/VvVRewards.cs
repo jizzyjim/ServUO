@@ -80,7 +80,7 @@ namespace Server.Engines.VvV
             Rewards.Add(new CollectionItem(typeof(HeartOfTheLion), 5141, 0, 1281, 500));
             Rewards.Add(new CollectionItem(typeof(CrimsonCincture), 5435, 0, 1157, 500));
             Rewards.Add(new CollectionItem(typeof(RingOfTheVile), 4234, 0, 1271, 500));
-            Rewards.Add(new CollectionItem(typeof(FeyLeggings), 5054, 0, 0, 500));
+            Rewards.Add(new CollectionItem(typeof(HumanFeyLeggings), 5054, 0, 0, 500));
             Rewards.Add(new CollectionItem(typeof(Stormgrip), 10130, 0, 0, 500));
             Rewards.Add(new CollectionItem(typeof(RuneBeetleCarapace), 10109, 0, 0, 500));
             Rewards.Add(new CollectionItem(typeof(KasaOfTheRajin), 10136, 0, 0, 500));
@@ -116,6 +116,30 @@ namespace Server.Engines.VvV
             Rewards.Add(new CollectionItem(typeof(PrideBanner), 39345, 1123369, 0, 10000)); // Pride Banner
             Rewards.Add(new CollectionItem(typeof(ShameBanner), 39347, 1123371, 0, 10000)); // Shame Banner
             Rewards.Add(new CollectionItem(typeof(WrongBanner), 39349, 1123373, 0, 10000)); // Wrong Banner
+        }
+
+        public static void OnRewardItemCreated(Mobile from, Item item)
+        {
+            if (item is IOwnerRestricted)
+                ((IOwnerRestricted)item).Owner = from;
+
+            if (item is IAccountRestricted && from.Account != null)
+                ((IAccountRestricted)item).Account = from.Account.Username;
+
+            NegativeAttributes neg = RunicReforging.GetNegativeAttributes(item);
+
+            if (neg != null && !(item is Spellbook))
+            {
+                neg.Antique = 1;
+
+                if (item is IDurability && ((IDurability)item).MaxHitPoints == 0)
+                {
+                    ((IDurability)item).MaxHitPoints = 255;
+                    ((IDurability)item).HitPoints = 255;
+                }
+            }
+
+            ViceVsVirtueSystem.Instance.AddVvVItem(item, true);
         }
     }
 }

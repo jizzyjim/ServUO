@@ -266,6 +266,11 @@ namespace Server.Spells.SkillMasteries
                     list.TrimExcess();
                 }
 
+                SpecialMove move = SpecialMove.GetCurrentMove(m);
+
+                if(move is SkillMasteryMove)
+                    SpecialMove.ClearCurrentMove(m);
+
                 m.RemoveStatMod("SavingThrow_Str");
 
                 ColUtility.Free(list);
@@ -354,7 +359,7 @@ namespace Server.Spells.SkillMasteries
         {
             if (spell == PassiveSpell.AnticipateHit)
                 return m.Skills.CurrentMastery == SkillName.Bushido;
-
+            
             return GetActivePassive(m) == spell;
         }
 
@@ -455,7 +460,7 @@ namespace Server.Spells.SkillMasteries
         {
             if (IsActivePassive(m, PassiveSpell.AnticipateHit))
             {
-                return (int)(m.Skills[SkillName.Bushido].Value / 2);
+                return (int)(m.Skills[SkillName.Bushido].Value * .67);
             }
 
             return 0;

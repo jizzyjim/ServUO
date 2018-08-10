@@ -4,7 +4,7 @@ using Server.Items;
 
 namespace Server.Mobiles
 {
-    [CorpseName("a archaeosaurus corpse")]
+    [CorpseName("an archaeosaurus corpse")]
     public class Archaeosaurus : BaseCreature
     {
         public override bool AttacksFocus { get { return true; } }
@@ -34,14 +34,18 @@ namespace Server.Mobiles
             SetDamageType(ResistanceType.Poison, 50);
             SetDamageType(ResistanceType.Fire, 50);
 
-            SetSkill(SkillName.MagicResist, 100, 115);
-            SetSkill(SkillName.Tactics, 90, 110);
-            SetSkill(SkillName.Wrestling, 90, 110);
-
-            PackItem(new DragonBlood(6));
+            SetSkill(SkillName.MagicResist, 100.0, 115.0);
+            SetSkill(SkillName.Tactics, 90.0, 110.0);
+            SetSkill(SkillName.Wrestling, 90.0, 110.0);
+            SetSkill(SkillName.DetectHidden, 60.0, 70.0);
+            SetSkill(SkillName.EvalInt, 95.0, 105.0);
+            SetSkill(SkillName.Ninjitsu, 120.0);
 
             Fame = 8100;
             Karma = -8100;
+
+            SetWeaponAbility(WeaponAbility.BleedAttack);
+            SetWeaponAbility(WeaponAbility.TalonStrike);
         }
 
         public override void GenerateLoot()
@@ -51,14 +55,7 @@ namespace Server.Mobiles
 
         public override int Meat { get { return 1; } }
         public override int Hides { get { return 7; } }
-
-        public override WeaponAbility GetWeaponAbility()
-        {
-            if (Utility.RandomBool())
-                return WeaponAbility.BleedAttack;
-
-            return WeaponAbility.TalonStrike;
-        }
+        public override int DragonBlood { get { return 6; } }
 
         public Archaeosaurus(Serial serial)
             : base(serial)

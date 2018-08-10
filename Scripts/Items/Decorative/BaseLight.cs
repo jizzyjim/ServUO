@@ -1,8 +1,12 @@
 using System;
+using Server.Engines.Craft;
+using Server.Gumps;
+using Server.Multis;
+using Server.ContextMenus;
 
 namespace Server.Items
 {
-    public abstract class BaseLight : Item
+    public abstract class BaseLight : Item, ICraftable, IResource, ISecurable
     {
         public static readonly bool Burnout = false;
         private Timer m_Timer;
@@ -11,10 +15,31 @@ namespace Server.Items
         private bool m_Burning = false;
         private bool m_Protected = false;
         private TimeSpan m_Duration = TimeSpan.Zero;
+        private CraftResource _Resource;
+        private Mobile _Crafter;
+        private ItemQuality _Quality;
+        private bool _PlayerConstructed;
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public CraftResource Resource { get { return _Resource; } set { _Resource = value; _Resource = value; Hue = CraftResources.GetHue(this._Resource); InvalidateProperties(); } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public Mobile Crafter { get { return _Crafter; } set { _Crafter = value; InvalidateProperties(); } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public ItemQuality Quality { get { return _Quality; } set { _Quality = value; InvalidateProperties(); } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool PlayerConstructed { get { return _PlayerConstructed; } set { _PlayerConstructed = value; InvalidateProperties(); } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public SecureLevel Level { get; set; }
+
         [Constructable]
         public BaseLight(int itemID)
             : base(itemID)
         {
+            Level = SecureLevel.Friends;
         }
 
         public BaseLight(Serial serial)
@@ -199,11 +224,73 @@ namespace Server.Items
             }
         }
 
+        public override void GetProperties(ObjectPropertyList list)
+        {
+            base.GetProperties(list);
+
+            if (_PlayerConstructed && _Crafter != null)
+            {
+                list.Add(1050043, _Crafter.TitleName); // crafted by ~1_NAME~
+            }
+
+            if (_Quality == ItemQuality.Exceptional)
+            {
+                list.Add(1060636); // Exceptional
+            }
+        }
+
+        public override void AddNameProperty(ObjectPropertyList list)
+        {
+            if (_Resource > CraftResource.Iron)
+            {
+                list.Add(1053099, "#{0}\t{1}", CraftResources.GetLocalizationNumber(_Resource), String.Format("#{0}", LabelNumber.ToString())); // ~1_oretype~ ~2_armortype~
+            }
+            else
+            {
+                base.AddNameProperty(list);
+            }
+        }
+
+        public virtual int OnCraft(int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, ITool tool, CraftItem craftItem, int resHue)
+        {
+            this.Quality = (ItemQuality)quality;
+
+            PlayerConstructed = true;
+
+            if (makersMark)
+                this.Crafter = from;
+
+            if (!craftItem.ForceNonExceptional)
+            {
+                if (typeRes == null)
+                    typeRes = craftItem.Resources.GetAt(0).ItemType;
+
+                Resource = CraftResources.GetFromType(typeRes);
+            }
+
+            return quality;
+        }
+
+        public override void GetContextMenuEntries(Mobile from, System.Collections.Generic.List<ContextMenuEntry> list)
+        {
+            base.GetContextMenuEntries(from, list);
+            SetSecureLevelEntry.AddTo(from, this, list);
+        }
+
         public override void Serialize(GenericWriter writer)
         {
             base.Serialize(writer);
 
-            writer.Write((int)0);
+            writer.Write((int)3);
+
+            writer.Write((int)Level);
+
+            writer.Write(_PlayerConstructed);
+
+            writer.Write((int)_Resource);
+            writer.Write(_Crafter);
+            writer.Write((int)_Quality);
+
             writer.Write(this.m_BurntOut);
             writer.Write(this.m_Burning);
             writer.Write(this.m_Duration);
@@ -221,6 +308,23 @@ namespace Server.Items
 
             switch ( version )
             {
+                case 3:
+                    {
+                        Level = (SecureLevel)reader.ReadInt();
+                        goto case 2;
+                    }
+                case 2:
+                    {
+                        _PlayerConstructed = reader.ReadBool();
+                        goto case 1;
+                    }
+                case 1:
+                    {
+                        _Resource = (CraftResource)reader.ReadInt();
+                        _Crafter = reader.ReadMobile();
+                        _Quality = (ItemQuality)reader.ReadInt();
+                        goto case 0;
+                    }
                 case 0:
                     {
                         this.m_BurntOut = reader.ReadBool();
@@ -234,6 +338,9 @@ namespace Server.Items
                         break;
                     }
             }
+
+            if(version == 2)
+                Level = SecureLevel.Friends;
         }
 
         private void DoTimer(TimeSpan delay)

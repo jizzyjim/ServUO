@@ -45,8 +45,6 @@ namespace Server.Mobiles
 
             VirtualArmor = 40;
 
-            QLPoints = 3;
-
             if (0.25 > Utility.RandomDouble())
                 PackItem(new DaemonBone(10));
         }
@@ -78,11 +76,6 @@ namespace Server.Mobiles
         public override void OnDeath(Container c)
         {
             base.OnDeath(c);
-
-            if (Utility.RandomDouble() < 0.05)
-            {
-                c.DropItem(new VoidOrb()); 
-            }
         }
 
         public override void Serialize(GenericWriter writer)

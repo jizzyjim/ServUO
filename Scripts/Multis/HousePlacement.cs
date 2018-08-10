@@ -52,8 +52,8 @@ namespace Server.Multis
             if (from.AccessLevel >= AccessLevel.GameMaster)
                 return HousePlacementResult.Valid; // Staff can place anywhere
 
-            if (map == Map.Ilshenar || SpellHelper.IsFeluccaT2A(map, center))
-                return HousePlacementResult.BadRegion; // No houses in Ilshenar/T2A
+            if (map == Map.Ilshenar || SpellHelper.IsFeluccaT2A(map, center) || SpellHelper.IsEodon(map, center))
+                return HousePlacementResult.BadRegion; // No houses in Ilshenar/T2A/Eodon
 
             if (map == Map.Malas && (multiID == 0x007C || multiID == 0x007E))
                 return HousePlacementResult.InvalidCastleKeep;
@@ -113,13 +113,13 @@ namespace Server.Multis
 
                     if (!reg.AllowHousing(from, testPoint)) // Cannot place houses in dungeons, towns, treasure map areas etc
                     {
-                        if (reg.IsPartOf(typeof(TempNoHousingRegion)))
+                        if (reg.IsPartOf<TempNoHousingRegion>())
                             return HousePlacementResult.BadRegionTemp;
 
-                        if (reg.IsPartOf(typeof(TreasureRegion)) || reg.IsPartOf(typeof(HouseRegion)))
+                        if (reg.IsPartOf<TreasureRegion>() || reg.IsPartOf<HouseRegion>())
                             return HousePlacementResult.BadRegionHidden;
 
-                        if (reg.IsPartOf(typeof(HouseRaffleRegion)))
+                        if (reg.IsPartOf<HouseRaffleRegion>())
                             return HousePlacementResult.BadRegionRaffle;
 
                         return HousePlacementResult.BadRegion;

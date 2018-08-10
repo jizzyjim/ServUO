@@ -9,7 +9,7 @@ namespace Server.Mobiles
     {
         [Constructable]
         public PutridUndeadGargoyle()
-            : base(AIType.AI_Melee, FightMode.Closest, 10, 1, 0.2, 0.4)
+            : base(AIType.AI_Mystic, FightMode.Closest, 10, 1, 0.2, 0.4)
         {
             Name = "a putrid undead gargoyle";
             Body = 722;
@@ -46,11 +46,6 @@ namespace Server.Mobiles
             Karma = -3500;
 
             VirtualArmor = 32;
-
-            QLPoints = 15;
-
-            if (0.05 > Utility.RandomDouble())
-                PackItem(new UndyingFlesh());
 
             if (0.05 > Utility.RandomDouble())
                 PackItem(new TatteredAncientScroll());

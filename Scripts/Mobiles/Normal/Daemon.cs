@@ -43,8 +43,6 @@ namespace Server.Mobiles
 
             VirtualArmor = 58;
 
-            QLPoints = 5;
-
             switch (Utility.Random(20))
             {
                 case 0:
@@ -123,12 +121,6 @@ namespace Server.Mobiles
             AddLoot(LootPack.Rich);
             AddLoot(LootPack.Average, 2);
             AddLoot(LootPack.MedScrolls, 2);
-        }
-
-        public override void OnDeath(Container c)
-        {
-            base.OnDeath(c);
-            SARegionDrops.GetSADrop(c);
         }
 
         public override void Serialize(GenericWriter writer)

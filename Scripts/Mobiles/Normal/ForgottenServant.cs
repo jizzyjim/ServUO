@@ -50,8 +50,6 @@ namespace Server.Mobiles
             this.Fame = 2500;
             this.Karma = -2500;
 
-            this.QLPoints = 8;
-
             this.AddItem(new Boots(Utility.RandomNeutralHue()));
             this.AddItem(new FancyShirt());
             this.AddItem(new Bandana());
@@ -103,24 +101,12 @@ namespace Server.Mobiles
                 return true;
             }
         }
+
         public override void GenerateLoot()
         {
             this.AddLoot(LootPack.Average);
         }
-        public override void OnDeath(Container c)
-        {
 
-            base.OnDeath(c);
-            Region reg = Region.Find(c.GetWorldLocation(), c.Map);
-            if (0.25 > Utility.RandomDouble() && reg.Name == "Stygian Dragon Lair Entrance")
-            {
-                switch (Utility.Random(2))
-                {
-                    case 0: c.DropItem(new EssenceDiligence()); break;
-                    case 1: c.DropItem(new FaeryDust()); break;
-                }
-            }
-        }
         public override void Serialize(GenericWriter writer)
         {
             base.Serialize(writer);

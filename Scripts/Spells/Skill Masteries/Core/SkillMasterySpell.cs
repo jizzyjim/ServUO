@@ -32,7 +32,7 @@ namespace Server.Spells.SkillMasteries
         public virtual bool PartyEffects { get { return false; } }
         public virtual int DamageThreshold { get { return 45; } }
         public virtual bool DamageCanDisrupt { get { return false; } }
-        public virtual int TickTime { get { return 2; } }
+        public virtual double TickTime { get { return 2; } }
         public virtual int PartyRange { get { return 12; } }
 
         public virtual int UpkeepCancelMessage { get { return 1156111; } } // You do not have enough mana to keep your ability active.
@@ -41,9 +41,12 @@ namespace Server.Spells.SkillMasteries
 
         public virtual bool CancelsWeaponAbility { get { return false; } }
         public virtual bool CancelsSpecialMove { get { return CancelsWeaponAbility; } }
+        public virtual bool ClearOnSpecialAbility { get { return false; } }
+
+        public virtual bool RevealOnTick { get { return true; } }
 
         public virtual TimeSpan ExpirationPeriod { get { return TimeSpan.FromMinutes(30); } }
-        public override TimeSpan CastDelayBase { get { return TimeSpan.FromSeconds(2.0); } }
+        public override TimeSpan CastDelayBase { get { return TimeSpan.FromSeconds(2.25); } }
 
 		public virtual double BaseSkillBonus 
 		{
@@ -81,7 +84,7 @@ namespace Server.Spells.SkillMasteries
             if (IsInCooldown(Caster, this.GetType()))
                 return false;
             
-            if (Caster.Skills[CastSkill].Value < RequiredSkill)
+            if (Caster.Player && Caster.Skills[CastSkill].Value < RequiredSkill)
                 Caster.SendLocalizedMessage(1115709); // Your skills are not high enough to invoke this mastery ability.
             else if (Caster is PlayerMobile && Caster.Skills.CurrentMastery != CastSkill)
                 Caster.SendLocalizedMessage(1115664); // You are not on the correct path for using this mastery ability.
@@ -115,18 +118,6 @@ namespace Server.Spells.SkillMasteries
             }
         }
 
-        public virtual void SendCastEffect()
-        {
-            Caster.FixedEffect(0x37C4, 10, (int)(GetCastDelay().TotalSeconds * 28), 4, 3);
-        }
-
-		public override void OnBeginCast()
-		{
-			base.OnBeginCast();
-
-			SendCastEffect();
-		}
-
 		public override void GetCastSkills( out double min, out double max )
 		{
             min = RequiredSkill;
@@ -145,6 +136,9 @@ namespace Server.Spells.SkillMasteries
 
         public bool CheckWeapon()
         {
+            if (!Caster.Player)
+                return true;
+
             BaseWeapon wep = GetWeapon();
 
             if (CastSkill == SkillName.Poisoning && wep != null && !(wep is Fists))
@@ -155,8 +149,17 @@ namespace Server.Spells.SkillMasteries
 
 		public virtual bool OnTick()
 		{
-            Caster.RevealingAction();
+            if (RevealOnTick)
+            {
+                Caster.RevealingAction();
+            }
+
             int upkeep = ScaleUpkeep();
+
+            if (0.10 > Utility.RandomDouble())
+            {
+                NegativeAttributes.OnCombatAction(Caster);
+            }
 
             if ((Caster is PlayerMobile && Caster.NetState == null) || Expires < DateTime.UtcNow)
                 Expire();
@@ -174,6 +177,10 @@ namespace Server.Spells.SkillMasteries
                 if(UpkeepCancelMessage > 0)
                     Caster.SendLocalizedMessage(UpkeepCancelMessage);
 
+                Expire();
+            }
+            else if (Caster.Skills[CastSkill].Value < RequiredSkill)
+            {
                 Expire();
             }
             else
@@ -222,10 +229,10 @@ namespace Server.Spells.SkillMasteries
 		{
 			return 0;
 		}
-		
-		public virtual void AbsorbDamage(ref int damage)
-		{
-		}
+
+        public virtual void OnDamaged(Mobile attacker, Mobile defender, DamageType type, ref int damage)
+        {
+        }
 		
 		public virtual void DoDamage(Mobile victim, int damageTaken)
 		{
@@ -255,7 +262,7 @@ namespace Server.Spells.SkillMasteries
         {
         }
 
-        public virtual void OnDamaged(Mobile attacker, int damage)
+        public virtual void OnTargetDamaged(Mobile attacker, Mobile victim, DamageType type, ref int damage)
         {
         }
 
@@ -286,8 +293,8 @@ namespace Server.Spells.SkillMasteries
 				
 			if(disrupt && DisruptMessage > 0)
 				Caster.SendLocalizedMessage(DisruptMessage);
-				
-			RemoveFromTable();
+
+            Server.Timer.DelayCall(RemoveFromTable);
 			RemoveStatMods();
             EndEffects();
 
@@ -315,7 +322,7 @@ namespace Server.Spells.SkillMasteries
 		public virtual double DamageModifier(Mobile victim)
 		{
             double dSkill = Caster.Skills[DamageSkill].Value;
-			double vSkill = victim.Skills[SkillName.MagicResist].Value;
+            double vSkill = GetResistSkill(victim);
 				
 			double reduce = (dSkill - vSkill) / dSkill;
 				
@@ -351,8 +358,9 @@ namespace Server.Spells.SkillMasteries
 
         public virtual double GetResistPercent(Mobile target, int level)
         {
-            double firstPercent = target.Skills[SkillName.MagicResist].Value / 5.0;
-            double secondPercent = target.Skills[SkillName.MagicResist].Value - (((Caster.Skills[CastSkill].Value - 20.0) / 5.0) + (1 + level) * 5.0);
+            double value = GetResistSkill(target);
+            double firstPercent = value / 5.0;
+            double secondPercent = value - (((Caster.Skills[CastSkill].Value - 20.0) / 5.0) + (1 + level) * 5.0);
 
             return (firstPercent > secondPercent ? firstPercent : secondPercent) / 2.0;
         }
@@ -362,14 +370,16 @@ namespace Server.Spells.SkillMasteries
             return (int)MasteryInfo.GetMasteryLevel(Caster, CastSkill);
         }
 
-		
-		public List<Mobile> GetParty()
-		{
-			if(!PartyEffects)
-				return null;
-				
-			Party p = Party.Get( Caster );
-            List<Mobile> list = new List<Mobile>();
+        /// <summary>
+        /// Gets dynamic enumeration of party members and pets withing party range
+        /// </summary>
+        /// <returns></returns>
+        public IEnumerable<Mobile> GetParty()
+        {
+            if (!PartyEffects)
+                yield break;
+
+            Party p = Party.Get(Caster);
 
             if (p != null)
             {
@@ -377,6 +387,9 @@ namespace Server.Spells.SkillMasteries
 
                 foreach (Mobile mob in eable)
                 {
+                    if (mob == Caster)
+                        yield return mob;
+
                     Mobile check = mob;
 
                     if (mob is BaseCreature && (((BaseCreature)mob).Summoned || ((BaseCreature)mob).Controlled))
@@ -384,24 +397,31 @@ namespace Server.Spells.SkillMasteries
 
                     if (check != null && p.Contains(check))
                     {
-                        list.Add(mob);
-
                         if (PartyList == null)
                             PartyList = new List<Mobile>();
 
                         if (!PartyList.Contains(mob))
                             PartyList.Add(mob);
+
+                        yield return mob;
                     }
                 }
 
                 eable.Free();
             }
+            else
+            {
+                if (Caster is PlayerMobile)
+                {
+                    foreach (var m in ((PlayerMobile)Caster).AllFollowers.Where(x => Caster.InRange(x.Location, PartyRange)))
+                    {
+                        yield return m;
+                    }
+                }
 
-            if (!list.Contains(Caster))
-                list.Add(Caster);
-
-			return list;
-		}
+                yield return Caster;
+            }
+        }
 		
 		private static Dictionary<Mobile, List<SkillMasterySpell>> m_Table = new Dictionary<Mobile, List<SkillMasterySpell>>();
 
@@ -432,25 +452,32 @@ namespace Server.Spells.SkillMasteries
 			
 			return false;
 		}
-		
-		public static SkillMasterySpell GetSpell(Mobile from, Type type)
-		{
-			if(m_Table.ContainsKey(from))
-			{
-				if(m_Table[from] == null || m_Table[from].Count == 0)
-					m_Table.Remove(from);
-				else
-				{
-                    foreach (SkillMasterySpell spell in m_Table[from])
-                    {
-                        if (spell != null && spell.GetType() == type)
-                            return spell;
-                    }
-				}
-			}
-			
-			return null;
-		}
+
+        public static SkillMasterySpell GetSpell(Mobile from, Type type)
+        {
+            CheckTable(from);
+
+            if (m_Table.ContainsKey(from))
+            {
+                foreach (SkillMasterySpell spell in m_Table[from])
+                {
+                    if (spell != null && spell.GetType() == type)
+                        return spell;
+                }
+            }
+
+            return null;
+        }
+
+        public static TSpell GetSpell<TSpell>(Mobile m) where TSpell : SkillMasterySpell
+        {
+            if (m_Table.ContainsKey(m))
+            {
+                return m_Table[m].FirstOrDefault(sms => sms.GetType() == typeof(TSpell)) as TSpell;
+            }
+
+            return null;
+        }
 
         public static SkillMasterySpell GetSpell(Func<SkillMasterySpell, bool> predicate)
 		{
@@ -462,6 +489,17 @@ namespace Server.Spells.SkillMasteries
            
 			return null;
 		}
+
+        public static TSpell GetSpell<TSpell>(Func<SkillMasterySpell, bool> predicate) where TSpell : SkillMasterySpell
+        {
+            foreach (SkillMasterySpell spell in EnumerateAllSpells().Where(sp => sp.GetType() == typeof(TSpell)))
+            {
+                if (predicate != null && predicate(spell))
+                    return spell as TSpell;
+            }
+
+            return null;
+        }
 
         public static IEnumerable<SkillMasterySpell> GetSpells(Func<SkillMasterySpell, bool> predicate)
         {
@@ -487,45 +525,47 @@ namespace Server.Spells.SkillMasteries
 
         public static bool HasSpell(Mobile from, Type type)
         {
+            CheckTable(from);
+
             if (m_Table.ContainsKey(from))
             {
-                if (m_Table[from] == null || m_Table[from].Count == 0)
-                    m_Table.Remove(from);
-                else
+                foreach (SkillMasterySpell spell in m_Table[from])
                 {
-                    foreach (SkillMasterySpell spell in m_Table[from])
-                    {
-                        if (spell != null && spell.GetType() == type)
-                            return true;
-                    }
+                    if (spell != null && spell.GetType() == type)
+                        return true;
                 }
             }
 
             return false;
         }
 
+        public static bool UnderPartyEffects(Mobile from, Type type)
+        {
+            return GetSpellForParty(from, type) != null;
+        }
+
         public static SkillMasterySpell GetSpellForParty(Mobile from, Type type)
         {
-            //First checks the bard
-            if (m_Table.ContainsKey(from))
-            {
-                if (m_Table[from] == null || m_Table[from].Count == 0)
-                {
-                    m_Table.Remove(from);
-                    return null;
-                }
+            CheckTable(from);
+            Mobile check = from;
 
-                foreach (SkillMasterySpell spell in m_Table[from])
+            if (from is BaseCreature && (((BaseCreature)from).Controlled || ((BaseCreature)from).Summoned) && ((BaseCreature)from).GetMaster() != null)
+            {
+                check = ((BaseCreature)from).GetMaster();
+                CheckTable(check);
+            }
+
+            //First checks the caster
+            if (m_Table.ContainsKey(check))
+            {
+                foreach (SkillMasterySpell spell in m_Table[check])
+                {
                     if (spell != null && spell.GetType() == type)
                         return spell;
+                }
             }
             else
             {
-                Mobile check = from;
-
-                if (from is BaseCreature && (((BaseCreature)from).Controlled || ((BaseCreature)from).Summoned))
-                    check = ((BaseCreature)from).GetMaster();
-
                 Party p = Party.Get(check);
 
                 if (p != null)
@@ -534,7 +574,7 @@ namespace Server.Spells.SkillMasteries
                     {
                         SkillMasterySpell spell = GetSpell(info.Mobile, type);
 
-                        if (spell != null && spell.PartyEffects && from.InRange(info.Mobile.Location, spell.PartyRange))
+                        if (spell != null && spell.PartyEffects && from.InRange(info.Mobile.Location, spell.PartyRange) && spell.CheckPartyEffects(info.Mobile))
                             return spell;
                     }
                 }
@@ -543,7 +583,46 @@ namespace Server.Spells.SkillMasteries
             return null;
         }
 
-        private static object _AllSpellsLock = new object();
+        public virtual bool CheckPartyEffects(Mobile m, bool beneficial = false)
+        {
+            if (m == Caster)
+                return true;
+
+            if (Caster.IsBeneficialCriminal(m))
+            {
+                int casterNoto = Notoriety.Compute(Caster, m);
+                int mNoto = Notoriety.Compute(m, Caster);
+
+                if (casterNoto == Notoriety.Enemy || casterNoto != mNoto)
+                {
+                    return false;
+                }
+            }
+
+            if (beneficial)
+                Caster.DoBeneficial(m);
+
+            return true;
+        }
+
+        private static object _Lock = new object();
+
+        public static void CheckTable(Mobile m)
+        {
+            if (m == null)
+                return;
+
+            lock (_Lock)
+            {
+                if (m_Table.ContainsKey(m))
+                {
+                    if (m_Table[m] == null || m_Table[m].Count == 0)
+                    {
+                        m_Table.Remove(m);
+                    }
+                }
+            }
+        }
 
         public static IEnumerable<SkillMasterySpell> EnumerateAllSpells()
         {
@@ -552,7 +631,7 @@ namespace Server.Spells.SkillMasteries
 
             List<SkillMasterySpell> list = new List<SkillMasterySpell>();
 
-            lock (_AllSpellsLock)
+            lock (_Lock)
             {
                 foreach (KeyValuePair<Mobile, List<SkillMasterySpell>> kvp in m_Table)
                 {
@@ -565,8 +644,6 @@ namespace Server.Spells.SkillMasteries
                 yield return spell;
             }
         }
-
-        private static object _Lock = new object();
 
         public static IEnumerable<SkillMasterySpell> EnumerateSpells(Mobile from, Type t = null)
         {
@@ -589,7 +666,7 @@ namespace Server.Spells.SkillMasteries
 
             lock (_Lock)
             {
-                e = list.AsParallel().Where(s => s.GetType() == t || t == null);
+                e = list.Where(s => s.GetType() == t || t == null);
             }
 
             foreach (SkillMasterySpell spell in e)
@@ -610,20 +687,33 @@ namespace Server.Spells.SkillMasteries
 		
 		protected void AddToTable(Mobile from, SkillMasterySpell spell)
 		{
-			if(!m_Table.ContainsKey(from))
-				m_Table[from] = new List<SkillMasterySpell>();
-				
-			m_Table[from].Add(spell);
+            lock (_Lock)
+            {
+                if (!m_Table.ContainsKey(from))
+                {
+                    m_Table[from] = new List<SkillMasterySpell>();
+                }
+
+                if (!m_Table[from].Contains(spell))
+                {
+                    m_Table[from].Add(spell);
+                }
+            }
 		}
 		
 		protected void RemoveFromTable()
 		{
 			if(m_Table.ContainsKey(Caster) && m_Table[Caster].Contains(this))
 			{
-				m_Table[Caster].Remove(this);
-				
-				if(m_Table[Caster].Count == 0)
-					m_Table.Remove(Caster);
+                lock (_Lock)
+                {
+                    m_Table[Caster].Remove(this);
+
+                    if (m_Table[Caster].Count == 0)
+                    {
+                        m_Table.Remove(Caster);
+                    }
+                }
 			}
 		}
 		
@@ -633,33 +723,37 @@ namespace Server.Spells.SkillMasteries
         /// <param name="victim"></param>
         /// <param name="damager"></param>
         /// <param name="damage"></param>
-		public static void OnCasterDamaged(Mobile victim, Mobile damager, ref int damage)
+		public static void OnDamage(Mobile victim, Mobile damager, DamageType type, ref int damage)
 		{
 			if(victim == null)
 				return;
 
-            if (m_Table.ContainsKey(victim))
-            {
-                if (m_Table[victim] == null || m_Table[victim].Count == 0)
-                    m_Table.Remove(victim);
-                else
-                {
-                    foreach (SkillMasterySpell sp in EnumerateSpells(victim))
-                    {
-                        if (sp.DamageCanDisrupt && damage > sp.DamageThreshold)
-                            sp.Expire(true);
+            CheckTable(victim);
 
-                        sp.OnDamaged(damager, damage);
-                    }
-                }
+            foreach (SkillMasterySpell sp in EnumerateSpells(victim))
+            {
+                if (sp.DamageCanDisrupt && damage > sp.DamageThreshold)
+                    sp.Expire(true);
+
+                sp.OnDamaged(damager, victim, type, ref damage);
+            }
+
+            foreach (SkillMasterySpell sp in GetSpells(s => s.Target == victim))
+            {
+                sp.OnTargetDamaged(damager, victim, type, ref damage);
             }
 
             SkillMasteryMove move = SpecialMove.GetCurrentMove(victim) as SkillMasteryMove;
 
             if (move != null)
-                move.OnDamaged(damager, victim, damage);
+                move.OnDamaged(damager, victim, type, ref damage);
 
-            //CombatTrainingSpell.CheckDamage(damager, victim, ref damage);
+            PerseveranceSpell spell = SkillMasterySpell.GetSpellForParty(victim, typeof(PerseveranceSpell)) as PerseveranceSpell;
+
+            if (spell != null)
+                spell.AbsorbDamage(ref damage);
+
+            CombatTrainingSpell.CheckDamage(damager, victim, type, ref damage);
 		}
 
         /// <summary>
@@ -685,8 +779,8 @@ namespace Server.Spells.SkillMasteries
             if (move != null)
                 move.OnGotHit(attacker, defender, ref damage);
 
-            /*if(attacker is BaseCreature || defender is BaseCreature)
-                CombatTrainingSpell.OnCreatureHit(attacker, defender, ref damage);*/
+            if(attacker is BaseCreature || defender is BaseCreature)
+                CombatTrainingSpell.OnCreatureHit(attacker, defender, ref damage);
         }
 
         /// <summary>
@@ -754,7 +848,10 @@ namespace Server.Spells.SkillMasteries
 			AddToTable(Caster, this);
 			AddStatMods();
 
-            Caster.RevealingAction();
+            if (RevealOnTick)
+            {
+                Caster.RevealingAction();
+            }
 
             Caster.Delta(MobileDelta.WeaponDamage);
 
@@ -825,6 +922,22 @@ namespace Server.Spells.SkillMasteries
             }
 
             return false;
+        }
+
+        public static void OnToggleSpecialAbility(Mobile m)
+        {
+            CheckTable(m);
+
+            if (m_Table.ContainsKey(m))
+            {
+                foreach (SkillMasterySpell sp in EnumerateSpells(m))
+                {
+                    if (sp.ClearOnSpecialAbility)
+                    {
+                        sp.Expire(true);
+                    }
+                }
+            }
         }
 
         private static Dictionary<SkillMasterySpell, DateTime> _Cooldown;

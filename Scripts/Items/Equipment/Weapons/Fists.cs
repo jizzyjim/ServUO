@@ -6,7 +6,8 @@ namespace Server.Items
     {
         public static void Initialize()
         {
-            Mobile.DefaultWeapon = new Fists();
+            if (Mobile.DefaultWeapon == null)
+                Mobile.DefaultWeapon = new Fists();
 
             EventSink.DisarmRequest += new DisarmRequestEventHandler(EventSink_DisarmRequest);
             EventSink.StunRequest += new StunRequestEventHandler(EventSink_StunRequest);
@@ -134,7 +135,7 @@ namespace Server.Items
         {
             this.Visible = false;
             this.Movable = false;
-            this.Quality = WeaponQuality.Regular;
+            this.Quality = ItemQuality.Normal;
         }
 
         public Fists(Serial serial)
@@ -284,6 +285,11 @@ namespace Server.Items
             base.Deserialize(reader);
 
             int version = reader.ReadInt();
+
+            if (Mobile.DefaultWeapon == null)
+                Mobile.DefaultWeapon = this;
+            else
+                Delete();
         }
 
         /* Wrestling moves */
@@ -320,11 +326,6 @@ namespace Server.Items
 
             Mobile m = e.Mobile;
 
-            #region Dueling
-            if (!Engines.ConPVP.DuelContext.AllowSpecialAbility(m, "Disarm", true))
-                return;
-            #endregion
-
             double armsValue = m.Skills[SkillName.ArmsLore].Value;
             double wresValue = m.Skills[SkillName.Wrestling].Value;
 
@@ -352,11 +353,6 @@ namespace Server.Items
                 return;
 
             Mobile m = e.Mobile;
-
-            #region Dueling
-            if (!Engines.ConPVP.DuelContext.AllowSpecialAbility(m, "Stun", true))
-                return;
-            #endregion
 
             double anatValue = m.Skills[SkillName.Anatomy].Value;
             double wresValue = m.Skills[SkillName.Wrestling].Value;

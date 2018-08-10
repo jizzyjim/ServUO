@@ -40,9 +40,13 @@ namespace Server.Engines.Quests
         public bool Check(PlayerMobile player, bool delete)
         {
             int j = 0;
-			
+
             while (j < player.DoneQuests.Count && player.DoneQuests[j].QuestType != this.m_Quest)
+            {
+                //if(player.Murderer && this.m_Quest == typeof(ResponsibilityQuest)  && player.DoneQuests[j].QuestType.IsSubclassOf(typeof(
+
                 j += 1;
+            }
 			
             if (j == player.DoneQuests.Count)
                 return false;
@@ -281,7 +285,7 @@ namespace Server.Engines.Quests
         }
 		
         #region Static
-        private static readonly Hashtable m_Pending = new Hashtable();
+        private static readonly Dictionary<Mobile, HeritageQuester> m_Pending = new Dictionary<Mobile, HeritageQuester>();
 		
         public static void AddPending(Mobile m, HeritageQuester quester)
         {
@@ -290,17 +294,20 @@ namespace Server.Engines.Quests
 		
         public static void RemovePending(Mobile m)
         {
-            m_Pending[m] = null;
+            if (m_Pending.ContainsKey(m))
+            {
+                m_Pending.Remove(m);
+            }
         }
 		
         public static bool IsPending(Mobile m)
         {
-            return m_Pending[m] != null;
+            return m_Pending.ContainsKey(m) && m_Pending[m] != null;
         }
 		
         public static HeritageQuester Pending(Mobile m)
         {
-            return m_Pending[m] as HeritageQuester;
+            return m_Pending.ContainsKey(m) ? m_Pending[m] as HeritageQuester : null;
         }
 		
         public static void Say(Mobile m, object message)

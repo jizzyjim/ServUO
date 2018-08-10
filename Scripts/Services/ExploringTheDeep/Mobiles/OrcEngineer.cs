@@ -1,46 +1,51 @@
-﻿using Server.Items;
 using System;
-using System.Collections;
+using Server.Items;
+using Server.Engines.Quests;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Server.Mobiles
 {
     [CorpseName("an orcish corpse")]
     public class OrcEngineer : Orc
     {
-        private static readonly ArrayList m_Instances = new ArrayList();
-        public static ArrayList Instances { get { return m_Instances; } }
+        public static List<OrcEngineer> Instances { get; set; }
 
         [Constructable]
         public OrcEngineer()
             : base()
         {
-            m_Instances.Add(this);
+            Title = "the Orcish Engineer";
 
-            this.Title = "the Orcish Engineer";
+            SetStr(500, 510);
+            SetDex(200, 210);
+            SetInt(200, 210);
 
-            this.SetStr(500, 510);
-            this.SetDex(200, 210);
-            this.SetInt(200, 210);
+            SetHits(3500, 3700);
 
-            this.SetHits(3520);
+            SetDamage(8, 14);
 
-            this.SetDamage(8, 14);
+            SetDamageType(ResistanceType.Physical, 100);
 
-            this.SetDamageType(ResistanceType.Physical, 100);
+            SetResistance(ResistanceType.Physical, 65, 70);
+            SetResistance(ResistanceType.Fire, 65, 70);
+            SetResistance(ResistanceType.Cold, 65, 70);
+            SetResistance(ResistanceType.Poison, 60);
+            SetResistance(ResistanceType.Energy, 65, 70);
 
-            this.SetResistance(ResistanceType.Physical, 65, 70);
-            this.SetResistance(ResistanceType.Fire, 65, 70);
-            this.SetResistance(ResistanceType.Cold, 65, 70);
-            this.SetResistance(ResistanceType.Poison, 60);
-            this.SetResistance(ResistanceType.Energy, 65, 70);
+            SetSkill(SkillName.Parry, 100.0, 110.0);
+            SetSkill(SkillName.MagicResist, 70.0, 80.0);
+            SetSkill(SkillName.Tactics, 110.0, 120.0);
+            SetSkill(SkillName.Wrestling, 120.0, 130.0);
+            SetSkill(SkillName.DetectHidden, 100.0, 110.0);
 
-            this.SetSkill(SkillName.Anatomy, 20);
-            this.SetSkill(SkillName.MagicResist, 72.6);
-            this.SetSkill(SkillName.Tactics, 114.6);
-            this.SetSkill(SkillName.Wrestling, 115.5);
+            Fame = 1500;
+            Karma = -1500;
 
-            this.Fame = 1500;
-            this.Karma = -1500;
+            if (Instances == null)
+                Instances = new List<OrcEngineer>();
+
+            Instances.Add(this);
 
             Timer SelfDeleteTimer = new InternalSelfDeleteTimer(this);
             SelfDeleteTimer.Start();
@@ -48,7 +53,7 @@ namespace Server.Mobiles
 
         public static OrcEngineer Spawn(Point3D platLoc, Map platMap)
         {
-            if (m_Instances.Count > 0)
+            if (Instances != null && Instances.Count > 0)
                 return null;
 
             OrcEngineer creature = new OrcEngineer();
@@ -73,33 +78,44 @@ namespace Server.Mobiles
                 if (Mare.Map != Map.Internal)
                 {
                     Mare.Delete();
-                    this.Stop();
+                    Stop();
                 }
             }
         }
-        
-        public override bool OnBeforeDeath()
+
+        public override void OnDeath(Container c)
         {
-            Mobile killer = DemonKnight.FindRandomPlayer(this);
+            List<DamageStore> rights = GetLootingRights();            
 
-            if (killer != null)
+            foreach (Mobile m in rights.Select(x => x.m_Mobile).Distinct())
             {
-                Item item = new OrcishSchematics();
+                if (m is PlayerMobile)
+                {
+                    PlayerMobile pm = m as PlayerMobile;
 
-                Container pack = killer.Backpack;
+                    if (pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
+                    {
+						Item item = new OrcishSchematics();
+						
+                        if (m.Backpack == null || !m.Backpack.TryDropItem(m, item, false))
+                        {
+                            m.BankBox.DropItem(item);
+                        }
 
-                if (pack == null || !pack.TryDropItem(killer, item, false))
-                    killer.BankBox.DropItem(item);
-
-                killer.SendLocalizedMessage(1154489); // You received a Quest Item!
+                        m.SendLocalizedMessage(1154489); // You received a Quest Item!
+                    }
+                }
             }
-            
-            return base.OnBeforeDeath();
+
+            if (Instances != null && Instances.Contains(this))
+                Instances.Remove(this);
+
+            base.OnDeath(c);
         }
 
         public override void OnAfterDelete()
         {
-            m_Instances.Remove(this);
+            Instances.Remove(this);
 
             base.OnAfterDelete();
         }
@@ -107,7 +123,6 @@ namespace Server.Mobiles
         public OrcEngineer(Serial serial)
             : base(serial)
         {
-            m_Instances.Add(this);
         }
 
         public override void Serialize(GenericWriter writer)
@@ -122,9 +137,11 @@ namespace Server.Mobiles
             base.Deserialize(reader);
             int version = reader.ReadInt();
 
+            Instances = new List<OrcEngineer>();
+            Instances.Add(this);
+
             Timer SelfDeleteTimer = new InternalSelfDeleteTimer(this);
             SelfDeleteTimer.Start();
         }
-
     }
 }

@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - Provocation.cs
-// **********
-#endregion
-
 #region References
 using System;
 
@@ -150,7 +144,7 @@ namespace Server.SkillHandlers
 
                         if (questTargets || (from.CanBeHarmful(m_Creature, true) && from.CanBeHarmful(target, true)))
                         {
-                            if (!BaseInstrument.CheckMusicianship(from))
+                            if (from.Player && !BaseInstrument.CheckMusicianship(from))
                             {
                                 from.NextSkillTime = Core.TickCount + (10000 - ((masteryBonus / 5) * 1000));
                                 from.SendLocalizedMessage(500612); // You play poorly, and there is no effect.

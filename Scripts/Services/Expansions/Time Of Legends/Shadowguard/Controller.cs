@@ -54,6 +54,14 @@ namespace Server.Engines.Shadowguard
         {
             EventSink.Login += new LoginEventHandler(OnLogin);
             EventSink.Disconnected += new DisconnectedEventHandler(OnDisconnected);
+
+            CommandSystem.Register("CompleteAllRooms", AccessLevel.GameMaster, e =>
+                {
+                    if (Instance.Table == null)
+                        Instance.Table = new Dictionary<Mobile, EncounterType>();
+
+                    Instance.Table[e.Mobile] = EncounterType.Bar | EncounterType.Orchard | EncounterType.Armory | EncounterType.Fountain | EncounterType.Belfry;
+                });
         }
 
         public void InitializeInstances()
@@ -95,30 +103,62 @@ namespace Server.Engines.Shadowguard
 
         public void OnTick()
         {
+            if (Encounters == null)
+                return;
+
             Encounters.ForEach(e =>
             {
-                DateTime end = e.StartTime + e.EncounterDuration;
-
-                if (!e.DoneWarning && DateTime.UtcNow > end - TimeSpan.FromMinutes(5))
-                    e.DoWarning();
-                else if (DateTime.UtcNow >= end)
+                if (e != null)
                 {
-                    e.Expire();
+                    if (e.EncounterDuration != TimeSpan.MaxValue)
+                    {
+                        DateTime end = e.StartTime + e.EncounterDuration;
+
+                        if (!e.DoneWarning && DateTime.UtcNow > end - TimeSpan.FromMinutes(5))
+                        {
+                            e.DoWarning();
+                        }
+                        else if (DateTime.UtcNow >= end)
+                        {
+                            e.Expire();
+                        }
+                        else
+                        {
+                            e.OnTick();
+                        }
+                    }
+                    else
+                    {
+                        e.OnTick();
+                    }
                 }
-                else
-                    e.OnTick();
             });
         }
 
         public void CompleteRoof(Mobile m)
         {
-            if (Table != null && Table.ContainsKey(m))
+            if(Table == null)
+                return;
+
+            Party p = Party.Get(m);
+
+            if (p != null)
+            {
+                foreach (PartyMemberInfo info in p.Members)
+                {
+                    Mobile mobile = info.Mobile;
+
+                    if (Table.ContainsKey(mobile))
+                        Table.Remove(mobile);
+                }
+            }
+            else if (Table.ContainsKey(m))
             {
                 Table.Remove(m);
-
-                if (Table.Count == 0)
-                    Table = null;
             }
+
+            if (Table.Count == 0)
+                Table = null;
         }
 
         public void OnEncounterComplete(ShadowguardEncounter encounter, bool expired)
@@ -614,14 +654,20 @@ namespace Server.Engines.Shadowguard
 
                 if (encounter == null)
                 {
-                    ShadowguardEncounter.MovePlayer(m, Instance.KickLocation, true);
+                    StormLevelGump menu = new StormLevelGump(m);
+                    menu.BeginClose();
+                    m.SendGump(menu);
                 }
                 else if (m != encounter.PartyLeader)
                 {
                     Party p = Party.Get(encounter.PartyLeader);
 
                     if (p == null || !p.Contains(m))
-                        ShadowguardEncounter.MovePlayer(m, Instance.KickLocation, true);
+                    {
+                        StormLevelGump menu = new StormLevelGump(m);
+                        menu.BeginClose();
+                        m.SendGump(menu);
+                    }
                 }
             }
         }
@@ -654,16 +700,16 @@ namespace Server.Engines.Shadowguard
             ankh.MoveToWorld(new Point3D(503, 2191, 25), Map.TerMur);    
 
             Item item = new Static(19343);
-            item.MoveToWorld(new Point3D(64, 2336, 30), Map.TerMur);
+            item.MoveToWorld(new Point3D(64, 2336, 29), Map.TerMur);
 
             item = new Static(19343);
-            item.MoveToWorld(new Point3D(160, 2336, 30), Map.TerMur);
+            item.MoveToWorld(new Point3D(160, 2336, 29), Map.TerMur);
 
             item = new Static(19343);
-            item.MoveToWorld(new Point3D(64, 2432, 30), Map.TerMur);
+            item.MoveToWorld(new Point3D(64, 2432, 29), Map.TerMur);
 
             item = new Static(19343);
-            item.MoveToWorld(new Point3D(160, 2432, 30), Map.TerMur);
+            item.MoveToWorld(new Point3D(160, 2432, 29), Map.TerMur);
 
             from.SendMessage("Shadowguard has been setup!");
             Console.WriteLine("Shadowguard setup!");
@@ -779,11 +825,14 @@ namespace Server.Engines.Shadowguard
             {
                 Timer.DelayCall(TimeSpan.FromSeconds(2), () =>
                 {
-                    Instance.Encounter.CheckPlayerStatus(m);
+                    if(Instance.Encounter != null)
+                        Instance.Encounter.CheckPlayerStatus(m);
                 });
             }
-            else if (m is BaseCreature)
+            else if (m is BaseCreature && Instance.Encounter != null)
+            {
                 Instance.Encounter.OnCreatureKilled((BaseCreature)m);
+            }
         }
 
         public override bool OnTarget(Mobile m, Server.Targeting.Target t, object o)

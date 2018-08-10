@@ -9,7 +9,7 @@ using Server.Network;
 using Server.Gumps;
 using Server.SkillHandlers;
 
-namespace Server.Engines.VendorSearhing
+namespace Server.Engines.VendorSearching
 {
     public class VendorSearchGump : Gump
     {
@@ -152,6 +152,11 @@ namespace Server.Engines.VendorSearhing
         {
             if (info.ButtonID != 0)
             {
+                if (!VendorSearch.CanSearch(User))
+                {
+                    User.SendLocalizedMessage(1154680); //Before using vendor search, you must be in a justice region or a safe log-out location (such as an inn or a house which has you on its Owner, Co-owner, or Friends list). 
+                    return;
+                }
                 TextRelay searchname = info.GetTextEntry(0);
 
                 if (searchname != null && !String.IsNullOrEmpty(searchname.Text))
@@ -371,6 +376,10 @@ namespace Server.Engines.VendorSearhing
                 VendorItem item = Items[i];
                 Rectangle2D bounds = ItemBounds.Table[item.Item.ItemID];
                 int y = 100 + (index * 75);
+                Map map = item.Item.Map;
+
+                if (map == null && item.Item.RootParentEntity is Mobile)
+                    map = ((Mobile)item.Item.RootParentEntity).Map;
 
                 AddImage(50, y, 2328);
                 AddItem(90 - bounds.Width / 2 - bounds.X, (30 - bounds.Height / 2 - bounds.Y) + y, item.Item.ItemID, item.Item.Hue);
@@ -387,7 +396,10 @@ namespace Server.Engines.VendorSearhing
                 AddItem(90 - bounds.Width / 2 - bounds.X, (30 - bounds.Height / 2 - bounds.Y) + y, item.Item.ItemID, item.Item.Hue);
 
                 AddHtml(200, y + 5, 88, 20, String.Format("<basefont color=#F5DEB3>{0}", item.Price == -1 ? "0" : item.FormattedPrice), false, false);
-                AddHtml(290, y + 5, 70, 20, String.Format("<basefont color=#F5DEB3>{0}", item.Item.Map.ToString()), false, false);
+                
+                if(map != null)
+                    AddHtml(290, y + 5, 70, 20, String.Format("<basefont color=#F5DEB3>{0}", map.ToString()), false, false);
+
                 AddButton(370, y + 5, 30533, 30533, 100 + i, GumpButtonType.Reply, 0);
 
                 index++;
@@ -509,51 +521,21 @@ namespace Server.Engines.VendorSearhing
             {
                 default: break;
                 case 1:
-                    if (VendorMap.SetLocation != Point3D.Zero)
-                    {
-                        User.Frozen = true;
-
-                        DoRecall(VendorMap.SetLocation, VendorMap.SetMap);
-                        User.PublicOverheadMessage(MessageType.Spell, User.SpeechHue, true, "Kal Ort Por", false);
-                    }
-                    else if (!VendorMap.CheckVendor())
+                    if (!VendorMap.CheckVendor())
                     {
                         User.SendLocalizedMessage(1154643); // That item is no longer for sale.
                     }
-                    else if (Banker.Withdraw(User, Cost, true))
+                    else if (!VendorSearch.CanSearch(User))
                     {
-                        User.Frozen = true;
-
-                        VendorMap.SetLocation = User.Location;
-                        VendorMap.SetMap = User.Map;
-
-                        User.PublicOverheadMessage(MessageType.Spell, User.SpeechHue, true, "Kal Ort Por", false);
-                        DoRecall(VendorMap.GetVendorLocation(), VendorMap.GetVendorMap());
+                        User.SendLocalizedMessage(1154680); //Before using vendor search, you must be in a justice region or a safe log-out location (such as an inn or a house which has you on its Owner, Co-owner, or Friends list). 
                     }
                     else
-                        User.SendLocalizedMessage(1019022); // You do not have enough gold.
+                    {
+                        new Server.Spells.Fourth.RecallSpell(User, null, VendorMap).Cast();
+                    }
+
                     break;
             }
-        }
-
-        private void DoRecall(Point3D loc, Map map)
-        {
-            Timer.DelayCall(TimeSpan.FromSeconds(1.5), () =>
-            {
-                User.Frozen = false;
-
-                if (VendorMap.CheckVendor())
-                {
-                    User.PlaySound(0x1FC);
-                    User.MoveToWorld(loc, map);
-                    User.PlaySound(0x1FC);
-
-                    if (loc == VendorMap.SetLocation && !VendorMap.Deleted)
-                        VendorMap.Delete();
-                }
-                else
-                    User.SendLocalizedMessage(1154700); // Item no longer for sale.
-            });
         }
     }
 }

@@ -10,6 +10,11 @@ namespace Server.Regions
         {
         }
 
+        public override bool AllowAutoClaim( Mobile from )
+        {
+            return false;
+        }
+
         public override bool AllowBeneficial(Mobile from, Mobile target)
         {
             if (from.IsPlayer())
@@ -39,9 +44,12 @@ namespace Server.Regions
         public override bool OnBeginSpellCast(Mobile from, ISpell s)
         {
             if (from.IsPlayer())
+            {
                 from.SendLocalizedMessage(502629); // You cannot cast spells here.
+                return false;
+            }
 
-            return (from.IsStaff());
+            return base.OnBeginSpellCast(from, s);
         }
 
         public override bool OnSkillUse(Mobile from, int Skill)

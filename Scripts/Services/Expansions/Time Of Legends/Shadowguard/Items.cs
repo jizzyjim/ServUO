@@ -795,7 +795,7 @@ namespace Server.Engines.Shadowguard
 	
 	public class MagicDrakeWing : BaseDecayingItem
 	{
-		public override int Lifespan { get { return 60; } }
+		public override int Lifespan { get { return 90; } }
 		public override int LabelNumber { get { return 1156233; } } // Magic Drake Wing
 
         [Constructable]
@@ -811,8 +811,8 @@ namespace Server.Engines.Shadowguard
             {
                 Point3D p = encounter.SpawnPoints[1];
                 encounter.ConvertOffset(ref p);
-                from.MoveToWorld(p, Map.TerMur);
                 BaseCreature.TeleportPets(from, p, from.Map);
+                from.MoveToWorld(p, Map.TerMur);
             }
 		}
 		

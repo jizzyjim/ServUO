@@ -3,40 +3,41 @@ using Server.Commands;
 using Server.Mobiles;
 using Server.Targeting;
 using Server.Network;
+using Server.Engines.Quests;
 
 namespace Server.Items
 {
     public class SorcerersPlateController : Item
     {
+        public static readonly string EntityName = "sorcerersplate";
+
         public static void Initialize()
         {
             CommandSystem.Register("GenSorcerersPlate", AccessLevel.Developer, new CommandEventHandler(GenSorcerersPlate_Command));
+            CommandSystem.Register("DelSorcerersPlate", AccessLevel.Developer, new CommandEventHandler(DelSorcerersPlate_Command));
         }
 
         [Usage("GenSorcerersPlate")]
         private static void GenSorcerersPlate_Command(CommandEventArgs e)
         {
-            if (Check())
-            {
-                e.Mobile.SendMessage("Sorcerers Plate is already present.");
-            }
-            else
-            {
-                e.Mobile.SendMessage("Creating Sorcerers Plate...");
+            DeletePlates();
+            e.Mobile.SendMessage("Creating Sorcerers Plate...");
 
-                SorcerersPlateController controller = new SorcerersPlateController();
+            SorcerersPlateController controller = new SorcerersPlateController();
+            WeakEntityCollection.Add(EntityName, controller);
 
-                e.Mobile.SendMessage("Generation completed!");
-            }
+            e.Mobile.SendMessage("Sorcerers Plate Generation Completed!");
         }
 
-        private static bool Check()
+        [Usage("DelSorcerersPlate")]
+        private static void DelSorcerersPlate_Command(CommandEventArgs e)
         {
-            foreach (Item item in World.Items.Values)
-                if (item is SorcerersPlateController && !item.Deleted)
-                    return true;
+            DeletePlates();
+        }
 
-            return false;
+        private static void DeletePlates()
+        {
+            WeakEntityCollection.Delete(EntityName);
         }
 
         private SorcerersPlate m_PerfectBlackPearl, m_BurstingBrimstone, m_BrightDaemonBlood, m_MightyMandrake, m_BurlyBone;
@@ -294,6 +295,11 @@ namespace Server.Items
                 m_Plate = plate;
             }
 
+            private bool CheckRegs(Item item)
+            {
+                return item is PerfectBlackPearl || item is BurstingBrimstone || item is BrightDaemonBlood || item is MightyMandrake || item is BurlyBone;
+            }
+
             protected override void OnTarget(Mobile from, object o)
             {
                 if (o is Item)
@@ -306,6 +312,20 @@ namespace Server.Items
                         return;
                     }
 
+                    if (!CheckRegs(item))
+                    {
+                        from.PublicOverheadMessage(MessageType.Regular, 0x3B2, 1154255); // *You place the item on the plate but it simply melts away. You had better search for a more pure reagent*
+                        return;
+                    }
+
+                    PlayerMobile pm = (PlayerMobile)from;
+
+                    if (pm.ExploringTheDeepQuest != ExploringTheDeepQuestChain.Sorcerers)
+                    {
+                        from.SendLocalizedMessage(1154325); // You feel as though by doing this you are missing out on an important part of your journey...
+                        return;
+                    }
+
                     if (item.GetType().Name == m_Plate.Type.ToString())
                     {
                         from.PublicOverheadMessage(MessageType.Regular, 0x3B2, 1154256); // *You place the reagent on the plate and hear an ominous click in the background...*
@@ -315,7 +335,7 @@ namespace Server.Items
                     }
                     else
                     {
-                        from.PublicOverheadMessage(MessageType.Regular, 0x3B2, 1154255); // *You place the item on the plate but it simply melts away. You had better search for a more pure reagent*
+						from.SendLocalizedMessage(500309); // Nothing Happens.                        
                     }
                 }
             }

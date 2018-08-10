@@ -1,4 +1,5 @@
 ﻿using System;
+using Server.Network;
 
 namespace Server.Items
 {    
@@ -13,16 +14,23 @@ namespace Server.Items
             this.Weight = 1.0;
             this.LootType = LootType.Blessed;
         }
-
-        public override int Lifespan { get { return 3600; } }
-        public override bool UseSeconds { get { return false; } }
-
-        public override void GetProperties(ObjectPropertyList list)
+		
+		public override void OnDoubleClick(Mobile from)
+        {
+			base.OnDoubleClick(from);			
+			
+			from.PublicOverheadMessage(MessageType.Regular, 0x3B2, 1154233); // *It appears to be the crude schematic to a drilling machine of Orcish origin. It is poorly devised and looks as if one were to build it the machine would explode*
+        }
+		
+		public override void GetProperties(ObjectPropertyList list)
         {
             base.GetProperties(list);
 
             list.Add(1072351); // Quest Item
         }
+
+        public override int Lifespan { get { return 3600; } }
+        public override bool UseSeconds { get { return false; } }
 
         public OrcishSchematics(Serial serial) : base(serial)
         {

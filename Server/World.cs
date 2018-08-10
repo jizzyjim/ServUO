@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - World.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections.Generic;
@@ -25,6 +19,8 @@ namespace Server
 		private static Dictionary<Serial, Mobile> m_Mobiles;
 		private static Dictionary<Serial, Item> m_Items;
 		private static Dictionary<CustomSerial, SaveData> _Data;
+		
+		private static bool m_Metrics = Config.Get("General.Metrics", false);
 
 		private static bool m_Loading;
 		private static bool m_Loaded;
@@ -109,6 +105,25 @@ namespace Server
 
 		public static void Broadcast(int hue, bool ascii, string text)
 		{
+			Broadcast(hue, ascii, AccessLevel.Player, text);
+		}
+
+		public static void Broadcast(int hue, bool ascii, AccessLevel access, string text)
+		{
+			var e = new WorldBroadcastEventArgs(hue, ascii, access, text);
+
+			EventSink.InvokeWorldBroadcast(e);
+
+			hue = e.Hue;
+			ascii = e.Ascii;
+			text = e.Text;
+			access = e.Access;
+
+			if (String.IsNullOrWhiteSpace(text))
+			{
+				return;
+			}
+
 			Packet p;
 
 			if (ascii)
@@ -124,11 +139,11 @@ namespace Server
 
 			p.Acquire();
 
-			for (int i = 0; i < list.Count; ++i)
+			foreach (NetState s in list)
 			{
-				if (list[i].Mobile != null)
+				if (s.Mobile != null && s.Mobile.AccessLevel >= access)
 				{
-					list[i].Send(p);
+					s.Send(p);
 				}
 			}
 
@@ -139,7 +154,12 @@ namespace Server
 
 		public static void Broadcast(int hue, bool ascii, string format, params object[] args)
 		{
-			Broadcast(hue, ascii, String.Format(format, args));
+			Broadcast(hue, ascii, AccessLevel.Player, format, args);
+		}
+
+		public static void Broadcast(int hue, bool ascii, AccessLevel access, string format, params object[] args)
+		{
+			Broadcast(hue, ascii, access, String.Format(format, args));
 		}
 
 		private interface IEntityEntry
@@ -286,10 +306,12 @@ namespace Server
 					{
 						Console.WriteLine("Error: Type '{0}' was not found. Delete all of those types? (y/n)", typeName);
 
-						if (Console.ReadKey(true).Key == ConsoleKey.Y)
+                        if (Console.ReadKey(true).Key == ConsoleKey.Y)
 						{
 							types.Add(null);
+							Utility.PushColor(ConsoleColor.Yellow);
 							Console.Write("World: Loading...");
+							Utility.PopColor();
 							continue;
 						}
 
@@ -772,13 +794,13 @@ namespace Server
 				{
 					Console.WriteLine("Delete the object? (y/n)");
 
-					if (Console.ReadKey(true).Key == ConsoleKey.Y)
+                    if (Console.ReadKey(true).Key == ConsoleKey.Y)
 					{
 						if (failedType != typeof(BaseGuild))
 						{
 							Console.WriteLine("Delete all objects of that type? (y/n)");
 
-							if (Console.ReadKey(true).Key == ConsoleKey.Y)
+                            if (Console.ReadKey(true).Key == ConsoleKey.Y)
 							{
 								if (failedMobiles)
 								{
@@ -1083,7 +1105,8 @@ namespace Server
 			{
 				return;
 			}
-            //EventSink.InvokeBeforeWorldSave(new BeforeWorldSaveEventArgs());
+            
+			EventSink.InvokeBeforeWorldSave(new BeforeWorldSaveEventArgs());
 
             ++m_Saves;
 
@@ -1098,7 +1121,7 @@ namespace Server
 
 			if (message)
 			{
-				Broadcast(0x35, true, "The world is saving, please wait.");
+				Broadcast(0x35, true, AccessLevel.Counselor, "The world is saving, please wait.");
 			}
 
 			SaveStrategy strategy = SaveStrategy.Acquire();
@@ -1125,9 +1148,16 @@ namespace Server
 				Directory.CreateDirectory("Saves/Customs/");
 			}
 
-			/*using ( SaveMetrics metrics = new SaveMetrics() ) {*/
-			strategy.Save(null, permitBackgroundWrite);
-			/*}*/
+			if (m_Metrics)
+			{
+				using ( SaveMetrics metrics = new SaveMetrics() ) {
+					strategy.Save(metrics, permitBackgroundWrite);
+				}
+			}
+			else
+			{
+				strategy.Save(null, permitBackgroundWrite);
+			}
 
 			try
 			{
@@ -1156,10 +1186,11 @@ namespace Server
 
 			if (message)
 			{
-				Broadcast(0x35, true, "World save complete. The entire process took {0:F1} seconds.", watch.Elapsed.TotalSeconds);
+				Broadcast(0x35, true, AccessLevel.Counselor, "World save complete. The entire process took {0:F1} seconds.", watch.Elapsed.TotalSeconds);
 			}
 
 			NetState.Resume();
+
             EventSink.InvokeAfterWorldSave(new AfterWorldSaveEventArgs());
         }
 

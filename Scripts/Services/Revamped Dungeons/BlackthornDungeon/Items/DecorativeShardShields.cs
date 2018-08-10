@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Server.Gumps;
 using Server.Multis;
 using Server.Network;
@@ -50,6 +50,11 @@ namespace Server.Items
             {
                 return this.ItemID <= 0x639A;
             }
+        }
+
+        void IChopable.OnChop(Mobile user)
+        {
+            OnDoubleClick(user);
         }
 
         public override void OnDoubleClick(Mobile from)
@@ -204,7 +209,7 @@ namespace Server.Items
 
             public override void OnResponse(NetState sender, RelayInfo info)
             {
-                if (this.m_Shield == null | this.m_Shield.Deleted)
+                if (this.m_Shield == null || this.m_Shield.Deleted)
                     return;
 
                 Mobile m = sender.Mobile;
@@ -255,7 +260,7 @@ namespace Server.Items
                         {
                             house = BaseHouse.FindHouseAt(p3d, map, id.Height);
 
-                            if (house != null && house.IsOwner(from))
+                            if (house != null && house.IsCoOwner(from))
                             {
                                 bool north = BaseAddon.IsWall(p3d.X, p3d.Y - 1, p3d.Z, map);
                                 bool west = BaseAddon.IsWall(p3d.X - 1, p3d.Y, p3d.Z, map);
@@ -274,8 +279,7 @@ namespace Server.Items
                                     else if (west)
                                         shield = new DecorativeShardShield(this.m_ItemID);
 
-                                    house.Addons.Add(shield);
-
+                                    house.Addons[shield] = from;
                                     shield.MoveToWorld(p3d, map);
 
                                     this.m_Shield.Delete();
@@ -340,7 +344,7 @@ namespace Server.Items
 
                     if (shield != null)
                     {
-                        this.m_House.Addons.Add(shield);
+                        this.m_House.Addons[shield] = sender.Mobile;
 
                         shield.MoveToWorld(this.m_Location, sender.Mobile.Map);
 

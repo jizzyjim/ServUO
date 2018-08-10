@@ -1,4 +1,4 @@
-﻿using Server.Items;
+﻿/*using Server.Items;
 
 namespace Server.Services
 {
@@ -72,13 +72,13 @@ namespace Server.Services
                             c.DropItem(new DelicateScales());
                             break;
                         case 7:
-                            c.DropItem(new SeedRenewal());
+                            c.DropItem(new SeedOfRenewal());
                             break;
                         case 8:
                             c.DropItem(new CrushedGlass());
                             break;
                         case 9:
-                            c.DropItem(new ElvenFletchings());
+                            c.DropItem(new ElvenFletching());
                             break;
                         case 10:
                             c.DropItem(new Lodestone());
@@ -127,4 +127,4 @@ namespace Server.Services
             }
         }
     }
-}
+}*/

@@ -46,12 +46,14 @@ namespace Server.Engines.Craft
             return 0.0; // 0%
         }
 
-        public override int CanCraft(Mobile from, BaseTool tool, Type itemType)
+        public override int CanCraft(Mobile from, ITool tool, Type itemType)
         {
-            if (tool == null || tool.Deleted || tool.UsesRemaining < 0)
+            int num = 0;
+
+            if (tool == null || tool.Deleted || tool.UsesRemaining <= 0)
                 return 1044038; // You have worn out your tool!
-            else if (!BaseTool.CheckAccessible(tool, from))
-                return 1044263; // The tool must be on your person to use.
+            else if (!tool.CheckAccessible(from, ref num))
+                return num; // The tool must be on your person to use.
 
             return 0;
         }
@@ -108,7 +110,6 @@ namespace Server.Engines.Craft
             index = AddCraft(typeof(EodonianWallMap), 1044448, 1156690, 65.0, 125.0, typeof(BlankMap), 1044449, 50, 1044450);
             AddRes(index, typeof(UnabridgedAtlasOfEodon), 1156721, 1, 1156722);
             AddRecipe(index, (int)CartographyRecipes.EodonianWallMap);
-            SetNeededExpansion(index, Expansion.TOL);
         }
 
         public int ConsumeTatteredWallMapRes(Mobile from, ConsumeType type)

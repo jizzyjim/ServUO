@@ -32,7 +32,7 @@ namespace Server.Misc
 	        if (m is BaseCreature && ((BaseCreature)m).IsChampionSpawn)
 		        return false;
 	        
-	        if (r.IsPartOf(typeof(Server.Regions.HouseRegion)) || Server.Multis.BaseBoat.FindBoatAt(m, m.Map) != null)
+	        if (r.IsPartOf<Server.Regions.HouseRegion>() || Server.Multis.BaseBoat.FindBoatAt(m, m.Map) != null)
                 return false;
 
             return (r.IsPartOf("Covetous") || r.IsPartOf("Deceit") || r.IsPartOf("Despise") || r.IsPartOf("Destard") ||
@@ -51,8 +51,9 @@ namespace Server.Misc
                 return;
             
             double vapoints = pm.VASTotalMonsterFame;
+            int luck = Math.Max(0, pm.RealLuck);
 
-            pm.VASTotalMonsterFame += (int)(bc.Fame * (1 + Math.Sqrt(pm.Luck) / 100));
+            pm.VASTotalMonsterFame += (int)Math.Max(0, (bc.Fame * (1 + Math.Sqrt(luck) / 100)));
 
             const double A = 0.000863316841;
             const double B = 0.00000425531915;

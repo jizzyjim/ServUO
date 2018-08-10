@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - BaseExplosionPotion.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections;
@@ -216,7 +210,7 @@ namespace Server.Items
 						damage /= toDamage - 1;
 					}
 
-					AOS.Damage(m, from, damage, 0, 100, 0, 0, 0);
+					AOS.Damage(m, from, damage, 0, 100, 0, 0, 0, Server.DamageType.SpellAOE);
 				}
 				else if (o is BaseExplosionPotion)
 				{

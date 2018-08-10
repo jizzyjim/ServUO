@@ -320,7 +320,13 @@ namespace Server.Gumps
                         if (sk.Base < 30)
                             continue;
 
-                        AddHtml(260, 70 + (index * 22), 245, 16, Color("#FFFFFF", Titles.GetSkillTitle(User, sk)), false, false);
+                        string title = Titles.GetSkillTitle(User, sk);
+
+                        if (title != null)
+                        {
+                            AddHtml(260, 70 + (index * 22), 245, 16, Color("#FFFFFF", title), false, false);
+                        }
+
                         AddCallbackButton(225, 70 + (index * 22), 4005, 4007, sk.Info.SkillID + 102, GumpButtonType.Reply, 0, b =>
                             {
                                 TitleSelected = b.ButtonID - 102;
@@ -339,7 +345,11 @@ namespace Server.Gumps
 
                     AddHtmlLocalized(225, 70, 270, 200, 1115056 + TitleSelected, 0xFFFF, false, false);
                     AddHtmlLocalized(225, 220, 160, 16, 1115027, 0xFFFF, false, false); // Paperdoll Name (Suffix)
-                    AddHtml(275, 240, 245, 16, Color("#FFFFFF", str), false, false);
+
+                    if (str != null)
+                    {
+                        AddHtml(275, 240, 245, 16, Color("#FFFFFF", str), false, false);
+                    }
 
                     AddHtmlLocalized(225, 275, 200, 16, 1115035, 0xFFFF, false, false); // Do you wish to apply this title?
 
@@ -583,7 +593,7 @@ namespace Server.Gumps
                             Refresh(false);
 
                             User.OverheadTitle = null;
-                            User.ShowGuildAbbreviation = true;
+                            User.DisplayGuildTitle = true;
                         });
                 }
             }
@@ -629,13 +639,12 @@ namespace Server.Gumps
 
                     AddHtmlLocalized(225, 220, 160, 16, 1115029, 0xFFFF, false, false); // Subtitle
 
-                    string cust = null;
+                    string cust;
+
                     if (title == 1154017 && CityLoyaltySystem.HasCustomTitle(User, out cust))
-                    {
-                        AddHtmlLocalized(275, 240, 245, 16, 1154017, cust, 0xFFFF, false, false);
-                    }
-                    else
-                        AddHtmlLocalized(275, 240, 160, 32, (int)title, 0xFFFF, false, false);
+                        AddHtmlLocalized(275, 240, 245, 16, title, cust, 0xFFFF, false, false);
+                    else if(title != 1154017)
+                        AddHtmlLocalized(275, 240, 160, 32, title, 0xFFFF, false, false);
 
                     AddHtmlLocalized(225, 275, 200, 16, 1115035, 0xFFFF, false, false); // Do you wish to apply this title?
 
@@ -682,7 +691,7 @@ namespace Server.Gumps
                 y += 22;
             }
 
-            if (User.CollectionTitles != null && User.CollectionTitles.Count > 0)
+            if (User.RewardTitles != null && User.RewardTitles.Count > 0)
             {
                 AddHtmlLocalized(55, y, 160, 16, 1115034, 0xFFFF, false, false); // Rewards
                 AddCallbackButton(20, y, 4005, 4007, 402, GumpButtonType.Reply, 0, b =>
@@ -724,7 +733,13 @@ namespace Server.Gumps
                         if (sk.Base < 30)
                             continue;
 
-                        AddHtml(260, 70 + (index * 22), 245, 16, Color("#FFFFFF", Titles.GetSkillTitle(User, sk)), false, false);
+                        string title = Titles.GetSkillTitle(User, sk);
+
+                        if (title != null)
+                        {
+                            AddHtml(260, 70 + (index * 22), 245, 16, Color("#FFFFFF", title), false, false);
+                        }
+
                         AddCallbackButton(225, 70 + (index * 22), 4005, 4007, sk.Info.SkillID + 404, GumpButtonType.Reply, 0, b =>
                         {
                             TitleSelected = b.ButtonID - 404;
@@ -751,10 +766,14 @@ namespace Server.Gumps
                     {
                         AddHtmlLocalized(225, 315, 200, 16, 1115036, 0xFFFF, false, false); // TITLE APPLIED
                         title = Titles.GetSkillTitle(User, User.Skills[(SkillName)TitleSelected]);
-                        User.SubtitleSkillTitle = title;
 
-                        User.SelectCollectionTitle(-1, true);
-                        User.DisplayGuildTitle = false;
+                        if (title != null)
+                        {
+                            User.SubtitleSkillTitle = title;
+
+                            User.SelectRewardTitle(-1, true);
+                            User.DisplayGuildTitle = false;
+                        }
 
                         Refresh(false);
                     });
@@ -789,13 +808,13 @@ namespace Server.Gumps
                         if (User.SubtitleSkillTitle != null)
                             User.SubtitleSkillTitle = null;
 
-                        User.SelectCollectionTitle(-1, true);
+                        User.SelectRewardTitle(-1, true);
 
                         Refresh(false);
                     });
                 }
             }  
-            else if (Category == TitleCategory.RewardTitles && User.CollectionTitles != null && User.CollectionTitles.Count > 0)
+            else if (Category == TitleCategory.RewardTitles && User.RewardTitles != null && User.RewardTitles.Count > 0)
             {
                 if (!ShowingDescription || TitleSelected == -1)
                 {
@@ -804,9 +823,9 @@ namespace Server.Gumps
 
                     AddPage(page);
 
-                    for (int i = 0; i < User.CollectionTitles.Count; i++)
+                    for (int i = 0; i < User.RewardTitles.Count; i++)
                     {
-                        object title = User.CollectionTitles[i];
+                        object title = User.RewardTitles[i];
 
                         if (title is int)
                         {
@@ -833,9 +852,9 @@ namespace Server.Gumps
                         CheckPage(ref index, ref page);
                     }
                 }
-                else if (TitleSelected >= 0 && User.CollectionTitles != null && TitleSelected < User.CollectionTitles.Count)
+                else if (TitleSelected >= 0 && User.RewardTitles != null && TitleSelected < User.RewardTitles.Count)
                 {
-                    object title = User.CollectionTitles[TitleSelected];
+                    object title = User.RewardTitles[TitleSelected];
                     object description = GetRewardTitleInfo(title);
 
                     if (description is int)
@@ -867,7 +886,7 @@ namespace Server.Gumps
                         AddHtmlLocalized(225, 315, 200, 16, 1115036, 0xFFFF, false, false); // TITLE APPLIED
                         Refresh(false);
 
-                        User.SelectCollectionTitle(TitleSelected, true);
+                        User.SelectRewardTitle(TitleSelected, true);
 
                         if (User.SubtitleSkillTitle != null)
                             User.SubtitleSkillTitle = null;
@@ -954,7 +973,7 @@ namespace Server.Gumps
                 case TitleType.PaperdollSuffix:
                     return User.PaperdollSkillTitle != null || User.CurrentChampTitle != null;
                 case TitleType.OverheadName:
-                    return User.OverheadTitle != null || User.ShowGuildAbbreviation;
+                    return User.OverheadTitle != null || User.DisplayGuildTitle;
                 case TitleType.SubTitles:
                     return User.SubtitleSkillTitle != null || User.SelectedTitle > -1 || User.CurrentVeteranTitle > 0 || User.DisplayGuildTitle;
             }
@@ -973,11 +992,10 @@ namespace Server.Gumps
                 case TitleType.OverheadName:
                     User.OverheadTitle = null;
                     User.DisplayGuildTitle = false;
-                    User.ShowGuildAbbreviation = false;
                     break;
                 case TitleType.SubTitles:
                     User.SubtitleSkillTitle = null;
-                    User.SelectCollectionTitle(-1, true);
+                    User.SelectRewardTitle(-1, true);
                     User.CurrentVeteranTitle = -1;
                     User.DisplayGuildTitle = false;
                     break;
@@ -1064,6 +1082,15 @@ namespace Server.Gumps
                 if ((id >= 1151739 && id <= 1151747) || id == 1155481 || id == 1154505)
                     return id + 1;
 
+                if (id >= 1157181 && id <= 1157203)
+                    return 1157180; // This title is obtained from turning in Bulk Order Deeds.
+
+                if (id >= 1156985 && id <= 1156987)
+                    return 1156984; // This title is obtained from the Halloween Treasures of the Kotl City Event.	
+
+                if (id >= 1152068 && id <= 1152073)
+                    return 1152075; // This is a reward title given for your valorous fights in arenas.
+
                 switch (id)
                 {
                     default: return "This reward title has no desciption.";
@@ -1086,6 +1113,14 @@ namespace Server.Gumps
                     case 1156477: return 1156476; // This title is obtained by completing the Valley of One Quest in the Valley of Eodon.
                     case 1155727: return 1155728; // This title is obtained from the Huntmaster's Challenge at the Ranger's Guild in Skara Brae.
                     case 1156318: return 1156319; // This is a reward title given for completing Shadowguard.
+                    case 1157594: return 1157595; // This title is obtained by completing the "Discovering Animal Training" quest.
+                    case 1158140: return 1158141; // This title is obtained by completing the Huntmaster's Challenge Quest.
+                    case 1158090: return 1158087; // This title is obtained by completing the Paladins of Trinsic Quest.
+                    case 1158161: return 1158162; // This title is obtained by completing the Righting Wrong Quest.	
+                    case 1158389: return 1158248; // This title is obtained by completing the Treasure Chase Quest.
+                    case 1158278: return 1158279; // This title is obtained by completing the "A Forced Sacrifice" quest.
+                    case 1158303: return 1158324; // This title is obtained by completing the "Whispering with Wisps" quest.
+                    case 1154505: return 1154506; // This is a reward title given for completing the Exploring the Deep Quest.
                 }
             }
 
@@ -1100,12 +1135,9 @@ namespace Server.Gumps
 
         public List<int> GetCityTitles()
         {
-            IEnumerable<int> list = User.CollectionTitles.OfType<int>().Where(i => IsCityTitle(i));
+            IEnumerable<int> list = User.RewardTitles.OfType<int>().Where(i => IsCityTitle(i));
 
-            if (list != null)
-                return list.ToList();
-
-            return null;
+            return list.ToList();
         }
 
         public void Refresh(bool recompile = true)

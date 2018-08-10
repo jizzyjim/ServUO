@@ -1,5 +1,6 @@
 using System;
 using Server.Targeting;
+using System.Collections.Generic;
 
 namespace Server.Spells.First
 {
@@ -14,6 +15,33 @@ namespace Server.Spells.First
         public ClumsySpell(Mobile caster, Item scroll)
             : base(caster, scroll, m_Info)
         {
+        }
+
+        public static Dictionary<Mobile, Timer> m_Table = new Dictionary<Mobile, Timer>();
+
+        public static bool IsUnderEffects(Mobile m)
+        {
+            return m_Table.ContainsKey(m);
+        }
+
+        public static void RemoveEffects(Mobile m, bool removeMod = true)
+        {
+            if (m_Table.ContainsKey(m))
+            {
+                Timer t = m_Table[m];
+
+                if (t != null && t.Running)
+                {
+                    t.Stop();
+                }
+
+                BuffInfo.RemoveBuff(m, BuffIcon.Clumsy);
+
+                if (removeMod)
+                    m.RemoveStatMod("[Magic] Dex Curse");
+
+                m_Table.Remove(m);
+            }
         }
 
         public override SpellCircle Circle
@@ -37,23 +65,50 @@ namespace Server.Spells.First
             else if (this.CheckHSequence(m))
             {
                 SpellHelper.Turn(this.Caster, m);
-
                 SpellHelper.CheckReflect((int)this.Circle, this.Caster, ref m);
 
-				SpellHelper.AddStatCurse(this.Caster, m, StatType.Dex);
-				int percentage = (int)(SpellHelper.GetOffsetScalar(this.Caster, m, true) * 100);
-				TimeSpan length = SpellHelper.GetDuration(this.Caster, m);
-				BuffInfo.AddBuff(m, new BuffInfo(BuffIcon.Clumsy, 1075831, length, m, percentage.ToString()));
+                if (Mysticism.StoneFormSpell.CheckImmunity(m))
+                {
+                    Caster.SendLocalizedMessage(1080192); // Your target resists your ability reduction magic.
+                    return;
+                }
 
-				if (m.Spell != null)
-                    m.Spell.OnCasterHurt();
+                int oldOffset = SpellHelper.GetCurseOffset(m, StatType.Dex);
+                int newOffset = SpellHelper.GetOffset(Caster, m, StatType.Dex, true, false);
 
-                m.Paralyzed = false;
+                if (-newOffset > oldOffset || newOffset == 0)
+                {
+                    DoHurtFizzle();
+                }
+                else
+                {
+                    if (m.Spell != null)
+                        m.Spell.OnCasterHurt();
 
-                m.FixedParticles(0x3779, 10, 15, 5002, EffectLayer.Head);
-                m.PlaySound(0x1DF);
+                    m.Paralyzed = false;
 
-                this.HarmfulSpell(m);
+                    m.FixedParticles(0x3779, 10, 15, 5002, EffectLayer.Head);
+                    m.PlaySound(0x1DF);
+
+                    HarmfulSpell(m);
+
+                    if (-newOffset < oldOffset)
+                    {
+                        SpellHelper.AddStatCurse(this.Caster, m, StatType.Dex, false, newOffset);
+
+                        int percentage = (int)(SpellHelper.GetOffsetScalar(this.Caster, m, true) * 100);
+                        TimeSpan length = SpellHelper.GetDuration(this.Caster, m);
+                        BuffInfo.AddBuff(m, new BuffInfo(BuffIcon.Clumsy, 1075831, length, m, percentage.ToString()));
+
+                        if (m_Table.ContainsKey(m))
+                            m_Table[m].Stop();
+
+                        m_Table[m] = Timer.DelayCall(length, () =>
+                            {
+                                RemoveEffects(m);
+                            });
+                    }
+                }
             }
 
             this.FinishSequence();

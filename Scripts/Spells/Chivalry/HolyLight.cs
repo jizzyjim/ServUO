@@ -6,10 +6,13 @@ namespace Server.Spells.Chivalry
 {
     public class HolyLightSpell : PaladinSpell
     {
+        public override DamageType SpellDamageType { get { return DamageType.SpellAOE; } }
+
         private static readonly SpellInfo m_Info = new SpellInfo(
             "Holy Light", "Augus Luminos",
             -1,
             9002);
+
         public HolyLightSpell(Mobile caster, Item scroll)
             : base(caster, scroll, m_Info)
         {
@@ -69,10 +72,13 @@ namespace Server.Spells.Chivalry
             if (this.CheckSequence())
             {
                 List<Mobile> targets = new List<Mobile>();
+                IPooledEnumerable eable = Caster.GetMobilesInRange(3);
 
-                foreach (Mobile m in this.Caster.GetMobilesInRange(3))
+                foreach (Mobile m in eable)
                     if (this.Caster != m && SpellHelper.ValidIndirectTarget(this.Caster, m) && this.Caster.CanBeHarmful(m, false) && (!Core.AOS || this.Caster.InLOS(m)))
                         targets.Add(m);
+
+                eable.Free();
 
                 this.Caster.PlaySound(0x212);
                 this.Caster.PlaySound(0x206);

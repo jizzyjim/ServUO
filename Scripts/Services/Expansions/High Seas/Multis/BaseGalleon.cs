@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Server;
 using Server.Mobiles;
 using Server.Items;
@@ -8,7 +8,6 @@ using Server.Accounting;
 using Server.Engines.PartySystem;
 using Server.ContextMenus;
 using Server.Gumps;
-using Server.Network;
 using System.Linq;
 
 namespace Server.Multis
@@ -50,9 +49,6 @@ namespace Server.Multis
         private BindingPole m_Pole;
         private Mobile m_CapturedCaptain;
 
-        private Mobile m_Captive;
-        private ShippingCrate m_ShippingCrate;
-
         private List<Item> m_MooringLines = new List<Item>();
         private List<Item> m_Cannons = new List<Item>();
         private List<Item> m_CannonTiles = new List<Item>();
@@ -62,6 +58,8 @@ namespace Server.Multis
         private List<Item> m_AddonTiles = new List<Item>();
 
         private Dictionary<Item, Item> _InternalCannon;
+
+        public List<Item> FillerTiles { get { return m_FillerTiles; } }
 
         [CommandProperty(AccessLevel.GameMaster)]
         public Mobile GalleonPilot { get { return m_GalleonPilot; } }
@@ -349,12 +347,12 @@ namespace Server.Multis
             return false;
         }
 
-        public override bool CanMoveOver(Item item)
+        public override bool CanMoveOver(IEntity entity)
         {
-            if (item.Z <= this.Z && !item.ItemData.Impassable && item.ItemData.Height < ZSurface / 2)
+            if (entity.Z <= this.Z && entity is Item && !((Item)entity).ItemData.Impassable && ((Item)entity).ItemData.Height < ZSurface / 2)
                 return true;
 
-            return base.CanMoveOver(item);
+            return base.CanMoveOver(entity);
         }
 
         public bool TryMarkRune(RecallRune rune, Mobile from)
@@ -366,7 +364,7 @@ namespace Server.Multis
             if (c != null)
                 c.AddItem(newRune);
             else
-                c.MoveToWorld(from.Location, from.Map);
+                newRune.MoveToWorld(from.Location, from.Map);
 
             rune.Delete();
             return true;
@@ -426,14 +424,29 @@ namespace Server.Multis
             if (Owner != null)
             {
                 if (bankbox)
-                    Owner.BankBox.DropItem(rune);
+                {
+                    if (!Owner.BankBox.TryDropItem(Owner, rune, false))
+                    {
+                        GalleonHold.DropItem(rune);
+                        Owner.SendLocalizedMessage(1149579); //A rune to your ship could not be created in your bank box. It has been placed in the ship's cargo hold instead.
+                    }
+                    else
+                    {
+                        Owner.SendLocalizedMessage(1149581); //A recall rune for your new ship has been placed in your bank box.
+                    }
+                }
                 else
-                    Owner.AddToBackpack(rune);
-
-                if (bankbox)
-                    Owner.SendLocalizedMessage(1149581); //A recall rune for your new ship has been placed in your bank box.
-                else
-                    Owner.SendLocalizedMessage(1149580); //A recall rune to your ship has been placed in your backpack.
+                {
+                    if (Owner.Backpack == null || !Owner.Backpack.TryDropItem(Owner, rune, false))
+                    {
+                        GalleonHold.DropItem(rune);
+                        Owner.SendLocalizedMessage(1149577); //A recall rune for your new ship could not be created in your backpack. It has been placed in the ship hold instead.
+                    }
+                    else
+                    {
+                        Owner.SendLocalizedMessage(1149581); //A recall rune for your new ship has been placed in your bank box.
+                    }
+                }
             }
             else
                 rune.Delete();
@@ -485,7 +498,12 @@ namespace Server.Multis
             return m_SecurityEntry.IsPublic;
         }
 
-        public bool HasAccess(Mobile from)
+        public override bool CanCommand(Mobile m)
+        {
+            return GetSecurityLevel(m) >= SecurityLevel.Crewman;
+        }
+
+        public override bool HasAccess(Mobile from)
         {
             if(Owner == null || (Scuttled && IsEnemy(from))/* || (Owner is BaseCreature && !Owner.Alive)*/)
                 return true;
@@ -505,19 +523,13 @@ namespace Server.Multis
             //TODO: Damage packets?
             if (damager != null)
             {
-                List<Mobile> list = GetMobilesOnBoard();
-
-                foreach(Mobile m in list.Where(mobile => mobile is PlayerMobile && mobile.NetState != null && HasAccess(mobile)))
+                foreach (var m in GetMobilesOnBoard().OfType<PlayerMobile>().Where(mobile => mobile.NetState != null && HasAccess(mobile)))
                 {
                     m.SendMessage(33, "Your ship has recieved {0} damage from {1}.", damage, damager.Name);
                 }
 
-                list.Clear();
-                list.TrimExcess();
-
                 if (damager is PlayerMobile && damager.NetState != null)
                     damager.SendMessage(33, "You have inflicted {0} to {1}.", damage, ShipName == null ? "an unnamed ship" : ShipName);
-
             }
 
             if (m_Hits < 0)
@@ -757,18 +769,18 @@ namespace Server.Multis
             return SlowDriftInterval;
         }
 
-        public override bool IsComponentItem(ISpawnable spawnable)
+        public override bool IsComponentItem(IEntity entity)
         {
-            if (!(spawnable is Item))
+            if (!(entity is Item))
                 return false;
 
-            Item item = (Item)spawnable;
+            Item item = (Item)entity;
 
             if (m_MooringLines.Contains(item) || m_Cannons.Contains(item) || m_CannonTiles.Contains(item)
                 || m_FillerTiles.Contains(item) || m_HoldTiles.Contains(item) || m_Addons.Contains(item) || item == m_Wheel || item == m_GalleonHold)
                 return true;
 
-            return base.IsComponentItem(spawnable);
+            return base.IsComponentItem(entity);
         }
 
         public override void OnAfterDelete()
@@ -962,16 +974,28 @@ namespace Server.Multis
             return check;
         }
 
-        public override List<Item> GetComponents()
+        public override IEnumerable<IEntity> GetComponents()
         {
-            List<Item> list = new List<Item>();
-            list.AddRange(m_CannonTiles);
-            list.AddRange(m_FillerTiles);
-            list.AddRange(m_HoldTiles);
-            list.AddRange(m_MooringLines);
-            list.Add(m_GalleonHold);
-            list.Add(m_Wheel);
-            return list;
+            foreach (var item in m_CannonTiles)
+                yield return item;
+
+            foreach (var item in m_FillerTiles)
+                yield return item;
+
+            foreach (var item in m_HoldTiles)
+                yield return item;
+
+            foreach (var item in m_MooringLines)
+                yield return item;
+
+            if(m_GalleonHold != null)
+                yield return m_GalleonHold;
+
+            if(m_Wheel != null)
+                yield return m_Wheel;
+
+            if(m_GalleonPilot != null)
+                yield return m_GalleonPilot;
         }
 
         public int GetValueForDirection(Direction direction)
@@ -1239,9 +1263,11 @@ namespace Server.Multis
                 if (secure != null) cloth += secure.GetAmount(type);
             }
 
+            double durability = ((double)Hits / (double)MaxHits) * 100;
+
 			//Now, how much do they need for 100% repair
-			double woodNeeded = WoodPer * (100.0 - Durability);
-			double clothNeeded = ClothPer * (100.0 - Durability);
+            double woodNeeded = WoodPer * (100.0 - durability);
+            double clothNeeded = ClothPer * (100.0 - durability);
 			
 			//Apply skill bonus
 			woodNeeded -= ((double)from.Skills[SkillName.Carpentry].Value / 200.0) * woodNeeded;
@@ -1250,7 +1276,7 @@ namespace Server.Multis
 			//get 10% of needed repairs
 			double minWood = woodNeeded / 10;
 			double minCloth = clothNeeded / 10;
-			
+
 			if(wood < minWood || cloth < minCloth)
 			{
                 from.SendLocalizedMessage(1116593, String.Format("{0}\t{1}", ((int)minCloth).ToString(), ((int)minWood).ToString())); //You need a minimum of ~1_CLOTH~ yards of cloth and ~2_WOOD~ pieces of lumber to effect repairs to this ship.
@@ -1269,7 +1295,7 @@ namespace Server.Multis
 				woodUsed = wood;
 				percWood = (wood / woodNeeded) * 100;
 			}
-				
+            
 			if(cloth >= clothNeeded)
 			{
 				clothUsed = clothNeeded;
@@ -1291,9 +1317,9 @@ namespace Server.Multis
                 woodUsed = clothUsed;
                 percWood = percCloth;
             }
-			
-			//Average out percentage
-			double totalPerc = (percWood + percCloth) / 2;
+
+            double totalPerc = (percWood + percCloth) / 2;
+
             double toConsume = 0;
             double woodTemp = woodUsed;
             double clothTemp = clothUsed;
@@ -1306,7 +1332,7 @@ namespace Server.Multis
                 if (woodUsed <= 0)
                     break;
 
-                if (pack != null && woodUsed > 0 && pack.GetAmount(type) > 0)
+                if (woodUsed > 0 && pack.GetAmount(type) > 0)
                 {
                     toConsume = Math.Min(woodUsed, pack.GetAmount(type));
                     pack.ConsumeTotal(type, (int)toConsume);
@@ -1333,7 +1359,7 @@ namespace Server.Multis
                 if (clothUsed <= 0)
                     break;
 
-                if (pack != null && clothUsed > 0 && pack.GetAmount(type) > 0)
+                if (clothUsed > 0 && pack.GetAmount(type) > 0)
                 {
                     toConsume = Math.Min(clothUsed, pack.GetAmount(type));
                     pack.ConsumeTotal(type, (int)toConsume);
@@ -1357,8 +1383,6 @@ namespace Server.Multis
             m_Hits += (int)((MaxHits - m_Hits) * (totalPerc / 100));
 			if(m_Hits > MaxHits) m_Hits = MaxHits;
 			ComputeDamage();
-			
-			totalPerc += Durability;
 
 			if(totalPerc > 100) 
                 totalPerc = 100;
@@ -1369,7 +1393,7 @@ namespace Server.Multis
                 m_EmergencyRepairTimer = null;
             }
 		
-            string args = String.Format("{0}\t{1}\t{2}", ((int)clothTemp).ToString(), ((int)woodTemp).ToString(), ((int)totalPerc).ToString());
+            string args = String.Format("{0}\t{1}\t{2}", ((int)clothTemp).ToString(), ((int)woodTemp).ToString(), ((int)Durability).ToString());
             from.SendLocalizedMessage(1116598, args); //You effect permanent repairs using ~1_CLOTH~ yards of cloth and ~2_WOOD~ pieces of lumber. The ship is now ~3_DMGPCT~% repaired.
         }
 

@@ -1,13 +1,7 @@
-#region Header
-// **********
-// ServUO - Spellbook.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections.Generic;
-
+ 
 using Server.Commands;
 using Server.Engines.Craft;
 using Server.Ethics;
@@ -16,7 +10,8 @@ using Server.Network;
 using Server.Spells;
 using Server.Targeting;
 using Server.Mobiles;
-using Server.Spells.Mystic;
+using Server.Spells.Mysticism;
+using Server.Factions;
 #endregion
 
 namespace Server.Items
@@ -40,7 +35,7 @@ namespace Server.Items
 		Exceptional,
 	}
 
-    public class Spellbook : Item, ICraftable, ISlayer, IEngravable, IVvVItem, IOwnerRestricted, IWearableDurability
+    public class Spellbook : Item, ICraftable, ISlayer, IEngravable, IVvVItem, IOwnerRestricted, IWearableDurability, IFactionItem
 	{
 		private static readonly Dictionary<Mobile, List<Spellbook>> m_Table = new Dictionary<Mobile, List<Spellbook>>();
 
@@ -80,6 +75,21 @@ namespace Server.Items
 			0, 0, 0, // 0 properties : 3/4 : 75%
 			1 // 1 property   : 1/4 : 25%
 		};
+
+        #region Factions
+        private FactionItem m_FactionState;
+
+        public FactionItem FactionItemState
+        {
+            get { return m_FactionState; }
+            set
+            {
+                m_FactionState = value;
+
+                LootType = (m_FactionState == null ? LootType.Regular : LootType.Blessed);
+            }
+        }
+        #endregion
 
 		private string m_EngravedText;
 		private BookQuality m_Quality;
@@ -334,48 +344,67 @@ namespace Server.Items
 			CommandSystem.Register("AllSpells", AccessLevel.GameMaster, AllSpells_OnCommand);
 		}
 
-        private static void Targeted_Spell(TargetedSpellEventArgs e) {
-            try {
-                Mobile from = e.NetState.Mobile;
+        #region Enhanced Client
+        private static void Targeted_Spell(TargetedSpellEventArgs e)
+        {
+            try
+            {
+                Mobile from = e.Mobile;
 
-                if (!DesignContext.Check(from)) {
+                if (!DesignContext.Check(from))
+                {
                     return; // They are customizing
                 }
 
                 Spellbook book = null;
                 int spellID = e.SpellID;
 
-                if (book == null || !book.HasSpell(spellID)) {
+                if (book == null || !book.HasSpell(spellID))
+                {
                     book = Find(from, spellID);
                 }
 
-                if (book != null && book.HasSpell(spellID)) {
+                if (book != null && book.HasSpell(spellID))
+                {
                     SpecialMove move = SpellRegistry.GetSpecialMove(spellID);
 
-                    if (move != null) {
+                    if (move != null)
+                    {
                         SpecialMove.SetCurrentMove(from, move);
-                    } else {
-                        Mobile to = World.FindMobile(e.Target.Serial);                       
+                    }
+                    else
+                    {
+                        Mobile to = World.FindMobile(e.Target.Serial);
                         Item toI = World.FindItem(e.Target.Serial);
-
                         Spell spell = SpellRegistry.NewSpell(spellID, from, null);
-                        if (to != null) {
+
+                        if (to != null)
+                        {
                             spell.InstantTarget = to;
-                        } else if (toI != null) {
-                            spell.InstantTarget = toI;
                         }
-                                           
-                        if (spell != null) {
+                        else if (toI != null)
+                        {
+                            spell.InstantTarget = toI as IDamageableItem;
+                        }
+
+                        if (spell != null)
+                        {
                             spell.Cast();
-                        } else if (!Server.Spells.SkillMasteries.MasteryInfo.IsPassiveMastery(spellID)) {
+                        }
+                        else if (!Server.Spells.SkillMasteries.MasteryInfo.IsPassiveMastery(spellID))
+                        {
                             from.SendLocalizedMessage(502345); // This spell has been temporarily disabled.
                         }
                     }
-                } else {
+                }
+                else
+                {
                     from.SendLocalizedMessage(500015); // You do not have that spell!
                 }
-            } catch {}
-        }     
+            }
+            catch { }
+        }
+        #endregion
 
         public static SpellbookType GetTypeForSpell(int spellID)
 		{
@@ -804,13 +833,17 @@ namespace Server.Items
 
 			if (m_EngravedText != null)
 			{
-				list.Add(1072305, m_EngravedText); // Engraved: ~1_INSCRIPTION~
+                list.Add(1072305, Utility.FixHtml(m_EngravedText)); // Engraved: ~1_INSCRIPTION~
 			}
 
 			if (m_Crafter != null)
 			{
 				list.Add(1050043, m_Crafter.TitleName); // crafted by ~1_NAME~
 			}
+
+            #region Factions
+            FactionEquipment.AddFactionProperties(this, list);
+            #endregion
 
             if (IsVvVItem)
             {
@@ -848,52 +881,113 @@ namespace Server.Items
 			}
 
 			int prop;
+			
 
-			if ((prop = m_AosAttributes.WeaponDamage) != 0)
+			if ((prop = m_AosAttributes.SpellChanneling) != 0)
 			{
-				list.Add(1060401, prop.ToString()); // damage increase ~1_val~%
+				list.Add(1060482); // spell channeling
+			}
+			
+			if ((prop = m_AosAttributes.NightSight) != 0)
+			{
+				list.Add(1060441); // night sight
 			}
 
-			if ((prop = m_AosAttributes.DefendChance) != 0)
+			if ((prop = m_AosAttributes.BonusStr) != 0)
 			{
-				list.Add(1060408, prop.ToString()); // defense chance increase ~1_val~%
+				list.Add(1060485, prop.ToString()); // strength bonus ~1_val~
 			}
-
+			
 			if ((prop = m_AosAttributes.BonusDex) != 0)
 			{
 				list.Add(1060409, prop.ToString()); // dexterity bonus ~1_val~
 			}
-
+			
+			if ((prop = m_AosAttributes.BonusInt) != 0)
+			{
+				list.Add(1060432, prop.ToString()); // intelligence bonus ~1_val~
+			}
+			
+			if ((prop = m_AosAttributes.BonusHits) != 0)
+			{
+				list.Add(1060431, prop.ToString()); // hit point increase ~1_val~
+			}
+			
+			if ((prop = m_AosAttributes.BonusStam) != 0)
+			{
+				list.Add(1060484, prop.ToString()); // stamina increase ~1_val~
+			}
+			
+			if ((prop = m_AosAttributes.BonusMana) != 0)
+			{
+				list.Add(1060439, prop.ToString()); // mana increase ~1_val~
+			}
+			
+			if ((prop = m_AosAttributes.RegenHits) != 0)
+			{
+				list.Add(1060444, prop.ToString()); // hit point regeneration ~1_val~
+			}
+			
+			if ((prop = m_AosAttributes.RegenStam) != 0)
+			{
+				list.Add(1060443, prop.ToString()); // stamina regeneration ~1_val~
+			}
+			
+			if ((prop = m_AosAttributes.RegenMana) != 0)
+			{
+				list.Add(1060440, prop.ToString()); // mana regeneration ~1_val~
+			}
+			
+			if ((prop = m_AosAttributes.Luck) != 0)
+			{
+				list.Add(1060436, prop.ToString()); // luck ~1_val~
+			}
+			
 			if ((prop = m_AosAttributes.EnhancePotions) != 0)
 			{
 				list.Add(1060411, prop.ToString()); // enhance potions ~1_val~%
+			}
+			
+			if ((prop = m_AosAttributes.ReflectPhysical) != 0)
+			{
+				list.Add(1060442, prop.ToString()); // reflect physical damage ~1_val~%
+			}
+			
+			if ((prop = m_AosAttributes.AttackChance) != 0)
+			{
+				list.Add(1060415, prop.ToString()); // hit chance increase ~1_val~%
+			}
+
+			if ((prop = m_AosAttributes.WeaponSpeed) != 0)
+			{
+				list.Add(1060486, prop.ToString()); // swing speed increase ~1_val~%
+			}
+			
+			if ((prop = m_AosAttributes.WeaponDamage) != 0)
+			{
+				list.Add(1060401, prop.ToString()); // damage increase ~1_val~%
+			}
+			
+			if ((prop = m_AosAttributes.DefendChance) != 0)
+			{
+				list.Add(1060408, prop.ToString()); // defense chance increase ~1_val~%
 			}
 
 			if ((prop = m_AosAttributes.CastRecovery) != 0)
 			{
 				list.Add(1060412, prop.ToString()); // faster cast recovery ~1_val~
 			}
-
-			if ((prop = m_AosAttributes.CastSpeed) != 0)
+            
+            if ((prop = m_AosAttributes.CastSpeed) != 0)
 			{
 				list.Add(1060413, prop.ToString()); // faster casting ~1_val~
 			}
-
-			if ((prop = m_AosAttributes.AttackChance) != 0)
+			
+			if ((prop = m_AosAttributes.SpellDamage) != 0)
 			{
-				list.Add(1060415, prop.ToString()); // hit chance increase ~1_val~%
+				list.Add(1060483, prop.ToString()); // spell damage increase ~1_val~%
 			}
-
-			if ((prop = m_AosAttributes.BonusHits) != 0)
-			{
-				list.Add(1060431, prop.ToString()); // hit point increase ~1_val~
-			}
-
-			if ((prop = m_AosAttributes.BonusInt) != 0)
-			{
-				list.Add(1060432, prop.ToString()); // intelligence bonus ~1_val~
-			}
-
+			
 			if ((prop = m_AosAttributes.LowerManaCost) != 0)
 			{
 				list.Add(1060433, prop.ToString()); // lower mana cost ~1_val~%
@@ -902,66 +996,6 @@ namespace Server.Items
 			if ((prop = m_AosAttributes.LowerRegCost) != 0)
 			{
 				list.Add(1060434, prop.ToString()); // lower reagent cost ~1_val~%
-			}
-
-			if ((prop = m_AosAttributes.Luck) != 0)
-			{
-				list.Add(1060436, prop.ToString()); // luck ~1_val~
-			}
-
-			if ((prop = m_AosAttributes.BonusMana) != 0)
-			{
-				list.Add(1060439, prop.ToString()); // mana increase ~1_val~
-			}
-
-			if ((prop = m_AosAttributes.RegenMana) != 0)
-			{
-				list.Add(1060440, prop.ToString()); // mana regeneration ~1_val~
-			}
-
-			if ((prop = m_AosAttributes.NightSight) != 0)
-			{
-				list.Add(1060441); // night sight
-			}
-
-			if ((prop = m_AosAttributes.ReflectPhysical) != 0)
-			{
-				list.Add(1060442, prop.ToString()); // reflect physical damage ~1_val~%
-			}
-
-			if ((prop = m_AosAttributes.RegenStam) != 0)
-			{
-				list.Add(1060443, prop.ToString()); // stamina regeneration ~1_val~
-			}
-
-			if ((prop = m_AosAttributes.RegenHits) != 0)
-			{
-				list.Add(1060444, prop.ToString()); // hit point regeneration ~1_val~
-			}
-
-			if ((prop = m_AosAttributes.SpellChanneling) != 0)
-			{
-				list.Add(1060482); // spell channeling
-			}
-
-			if ((prop = m_AosAttributes.SpellDamage) != 0)
-			{
-				list.Add(1060483, prop.ToString()); // spell damage increase ~1_val~%
-			}
-
-			if ((prop = m_AosAttributes.BonusStam) != 0)
-			{
-				list.Add(1060484, prop.ToString()); // stamina increase ~1_val~
-			}
-
-			if ((prop = m_AosAttributes.BonusStr) != 0)
-			{
-				list.Add(1060485, prop.ToString()); // strength bonus ~1_val~
-			}
-
-			if ((prop = m_AosAttributes.WeaponSpeed) != 0)
-			{
-				list.Add(1060486, prop.ToString()); // swing speed increase ~1_val~%
 			}
 
 			if (Core.ML && (prop = m_AosAttributes.IncreasedKarmaLoss) != 0)
@@ -1158,7 +1192,7 @@ namespace Server.Items
 			Mobile from,
 			CraftSystem craftSystem,
 			Type typeRes,
-			BaseTool tool,
+            ITool tool,
 			CraftItem craftItem,
 			int resHue)
 		{
@@ -1202,6 +1236,22 @@ namespace Server.Items
 				}
 
 				int propertyCount = propertyCounts[Utility.Random(propertyCounts.Length)];
+
+                GuaranteedSpellbookImprovementTalisman talisman = from.FindItemOnLayer(Layer.Talisman) as GuaranteedSpellbookImprovementTalisman;
+
+                if (talisman != null && talisman.Charges > 0)
+                {
+                    propertyCount++;
+                    talisman.Charges--;
+
+                    from.SendLocalizedMessage(1157210); // Your talisman magically improves your spellbook.
+
+                    if (talisman.Charges <= 0)
+                    {
+                        from.SendLocalizedMessage(1157211); // Your talisman has been destroyed.
+                        talisman.Delete();
+                    }
+                }
 
 				BaseRunicTool.ApplyAttributesTo(this, true, 0, propertyCount, minIntensity, maxIntensity);
 			}

@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - GreenGoblinScout.cs
-// **********
-#endregion
-
 #region References
 using Server.Targeting;
 using Server.Items;
@@ -11,7 +5,7 @@ using Server.Items;
 
 namespace Server.Mobiles
 {
-	[CorpseName("an goblin corpse")]
+	[CorpseName("a goblin corpse")]
 	public class GreenGoblinScout : BaseCreature
 	{
 		//public override InhumanSpeech SpeechType { get { return InhumanSpeech.Orc; } }
@@ -19,7 +13,7 @@ namespace Server.Mobiles
 		public GreenGoblinScout()
 			: base(AIType.AI_OrcScout, FightMode.Closest, 10, 7, 0.2, 0.4)
 		{
-			Name = "an green goblin scout";
+			Name = "a green goblin scout";
 			Body = 723;
 			BaseSoundID = 0x45A;
 
@@ -48,15 +42,15 @@ namespace Server.Mobiles
 
 			Fame = 1500;
 			Karma = -1500;
-
-            QLPoints = 10;
 		}
 
 		public GreenGoblinScout(Serial serial)
 			: base(serial)
 		{ }
 
-		public override OppositionGroup OppositionGroup { get { return OppositionGroup.SavagesAndOrcs; } }
+
+        public override TribeType Tribe { get { return TribeType.GreenGoblin; } }
+
 		public override bool CanRummageCorpses { get { return true; } }
 		public override int Meat { get { return 1; } }
 
@@ -68,9 +62,6 @@ namespace Server.Mobiles
         public override void OnDeath(Container c)
         {
             base.OnDeath(c);
-
-            if (Utility.RandomDouble() < 0.05)
-                c.DropItem(new GoblinBlood());
 
             if (Utility.RandomDouble() < 0.01)
                 c.DropItem(new LuckyCoin());
@@ -98,14 +89,17 @@ namespace Server.Mobiles
 
 		private Mobile FindTarget()
 		{
-			foreach (Mobile m in GetMobilesInRange(10))
+            IPooledEnumerable eable = GetMobilesInRange(10);
+			foreach (Mobile m in eable)
 			{
 				if (m.Player && m.Hidden && m.IsPlayer())
 				{
+                    eable.Free();
 					return m;
 				}
 			}
 
+            eable.Free();
 			return null;
 		}
 

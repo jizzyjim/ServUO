@@ -14,19 +14,19 @@ namespace Server.Items
             this.LootType = LootType.Blessed;
             this.Hue = 2315;
         }
+		
+		public override void GetProperties(ObjectPropertyList list)
+        {
+            base.GetProperties(list);
+
+            list.Add(1072351); // Quest Item
+        }
 
         public override int Lifespan { get { return 18000; } }
 
         public WireSpool(Serial serial)
             : base(serial)
         {
-        }
-
-        public override void GetProperties(ObjectPropertyList list)
-        {
-            base.GetProperties(list);
-
-            list.Add(1072351); // Quest Item
         }
 
         public override void Serialize(GenericWriter writer)

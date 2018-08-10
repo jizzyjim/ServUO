@@ -78,34 +78,32 @@ namespace Server.Mobiles
                 return Poison.Lesser;
             }
         }
-        public override OppositionGroup OppositionGroup
+
+        public override TribeType Tribe { get { return TribeType.Undead; } }
+
+         public override OppositionGroup OppositionGroup
         {
             get
             {
                 return OppositionGroup.FeyAndUndead;
             }
         }
-        public override void GenerateLoot()
+        
+        public override bool IsEnemy(Mobile m)
+        {
+            if(Region.IsPartOf("Haven Island"))
+            {
+                return false;
+            }
+            
+            return base.IsEnemy(m);
+        }
+        
+       public override void GenerateLoot()
         {
             this.AddLoot(LootPack.Poor);
         }
-        public override void OnDeath(Container c)
-        {
 
-            base.OnDeath(c);
-            Region reg = Region.Find(c.GetWorldLocation(), c.Map);
-            if (0.25> Utility.RandomDouble() && reg.Name == "The Lands of the Lich")
-            {
-                if (Utility.RandomDouble() < 0.6)
-                    c.DropItem(new EssenceDirection());
-            }
-            if (0.25 > Utility.RandomDouble() && reg.Name == "Skeletal Dragon")
-            {
-                if (Utility.RandomDouble() < 0.6)
-                    c.DropItem(new EssencePersistence());
-
-            }
-        }
         public override void Serialize(GenericWriter writer)
         {
             base.Serialize(writer);

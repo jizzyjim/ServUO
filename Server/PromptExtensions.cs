@@ -38,11 +38,18 @@ namespace Server.Network
 
 	public class PromptGumpStub : Gump
 	{
-		public override int TypeID { get { return 0x2AE; } }
+		public Mobile User { get; private set; }
+
+		public override int GetTypeID()
+        {
+            return 0x2AE;
+        }
 
 		public PromptGumpStub( Prompt prompt, Mobile to )
 			: base( 0, 0 )
 		{
+			User = to;
+
 			Serial senderSerial = prompt.Sender != null ? prompt.Sender.Serial : to.Serial;
 
 			Serial = senderSerial;
@@ -68,7 +75,7 @@ namespace Server.Network
 
 		public Packet GetPacket()
 		{
-			return Compile();
+			return GetPacketFor(User != null ? User.NetState : null);
 		}
 	}
 }

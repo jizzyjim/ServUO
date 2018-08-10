@@ -27,15 +27,21 @@ namespace Server.Spells.SkillMasteries
         public int RequiredTithing { get { return 100; } }
 
         public override SkillName CastSkill { get { return SkillName.Chivalry; } }
+        public override SkillName DamageSkill { get { return SkillName.Chivalry; } }
 
         public RejuvinateSpell(Mobile caster, Item scroll)
             : base(caster, scroll, m_Info)
         {
         }
 
+        public override void SendCastEffect()
+        {
+            Caster.FixedEffect(0x37C4, 87, (int)(GetCastDelay().TotalSeconds * 28), 4, 3);
+        }
+
         public override bool CheckCast()
         {
-            if (Caster is PlayerMobile && Caster.TithingPoints < RequiredTithing)
+            if (Caster is PlayerMobile && (Caster.Player && Caster.TithingPoints < RequiredTithing))
             {
                 Caster.SendLocalizedMessage(1060173, RequiredTithing.ToString()); // You must have at least ~1_TITHE_REQUIREMENT~ Tithing Points to use this ability,
                 return false;
@@ -191,7 +197,7 @@ namespace Server.Spells.SkillMasteries
         {
             int requiredTithing = this.RequiredTithing;
 
-            if (Caster is PlayerMobile && Caster.TithingPoints < requiredTithing)
+            if (Caster is PlayerMobile && (Caster.Player && Caster.TithingPoints < requiredTithing))
             {
                 Caster.SendLocalizedMessage(1060173, RequiredTithing.ToString()); // You must have at least ~1_TITHE_REQUIREMENT~ Tithing Points to use this ability,
                 return false;

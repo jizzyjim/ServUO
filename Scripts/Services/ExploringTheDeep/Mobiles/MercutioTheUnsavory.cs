@@ -1,69 +1,109 @@
-﻿using System;
+using System;
 using Server.Items;
-using System.Collections;
+using System.Collections.Generic;
+using Server.Engines.Quests;
+using System.Linq;
 
 namespace Server.Mobiles
 {
     [CorpseName("a mercutio corpse")]
-    public class MercutioTheUnsavory : Brigand
+    public class MercutioTheUnsavory : BaseCreature
     {
-        private static readonly ArrayList m_Instances = new ArrayList();
-        public static ArrayList Instances { get { return m_Instances; } }
+        public static List<MercutioTheUnsavory> Instances { get; set; }
 
         [Constructable]
         public MercutioTheUnsavory()
-            : base()
+            : base(AIType.AI_Melee, FightMode.Closest, 10, 1, 0.2, 0.4)
         {
-            m_Instances.Add(this);
+            Body = 0x190;
+            Hue = Utility.RandomSkinHue();
+            Name = "Mercutio";
+            Title = "The Unsavory";
+            Female = false;
 
-            this.Name = "Mercutio";
-            this.Title = "The Unsavory";
+            SetStr(1000, 1300);
+            SetDex(101, 125);
+            SetInt(61, 75);
 
-            this.SetStr(120, 150);
-            this.SetDex(101, 125);
-            this.SetInt(61, 75);
-            this.Hits = 200;
+            SetDamage(11, 24);
 
-            this.SetDamage(11, 24);
+            SetDamageType(ResistanceType.Physical, 100);
 
-            this.SetSkill(SkillName.Fencing, 106.0, 117.5);
-            this.SetSkill(SkillName.Macing, 105.0, 117.5);
-            this.SetSkill(SkillName.MagicResist, 50.0, 90.5);
-            this.SetSkill(SkillName.Swords, 105.0, 117.5);
-            this.SetSkill(SkillName.Tactics, 105.0, 117.5);
-            this.SetSkill(SkillName.Wrestling, 55.0, 87.5);
+            SetResistance(ResistanceType.Physical, 10, 15);
+            SetResistance(ResistanceType.Fire, 10, 15);
+            SetResistance(ResistanceType.Poison, 10, 15);
+            SetResistance(ResistanceType.Energy, 10, 15);
 
-            this.Fame = 3000;
-            this.Karma = -3000;            
+            SetSkill(SkillName.Fencing, 106.0, 117.5);
+            SetSkill(SkillName.Macing, 105.0, 117.5);
+            SetSkill(SkillName.MagicResist, 50.0, 90.5);
+            SetSkill(SkillName.Swords, 105.0, 117.5);
+            SetSkill(SkillName.Parry, 105.0, 117.5);
+            SetSkill(SkillName.Tactics, 105.0, 117.5);
+            SetSkill(SkillName.Wrestling, 55.0, 87.5);
+
+            Fame = 3000;
+            Karma = -3000;
+
+            if (Instances == null)
+                Instances = new List<MercutioTheUnsavory>();
+
+            Instances.Add(this);
+
+            AddImmovableItem(new Cutlass());
+            AddImmovableItem(new ChainChest());
+            AddImmovableItem(Loot.RandomShield());
+            AddImmovableItem(new ShortPants(Utility.RandomNeutralHue()));
+            AddImmovableItem(new Boots(Utility.RandomNeutralHue()));
+
+            Utility.AssignRandomHair(this);
 
             Timer SelfDeleteTimer = new InternalSelfDeleteTimer(this);
             SelfDeleteTimer.Start();
         }
 
+        private void AddImmovableItem(Item item)
+        {
+            item.LootType = LootType.Blessed;
+            AddItem(item);
+        }
+
+        public override bool ClickTitle { get { return false; } }
         public override bool AlwaysMurderer { get { return true; } }
 
-        public override bool OnBeforeDeath()
+        public override void OnDeath(Container c)
         {
-            Mobile killer = DemonKnight.FindRandomPlayer(this);
+            List<DamageStore> rights = GetLootingRights();            
 
-            if (killer != null)
+            foreach (Mobile m in rights.Select(x => x.m_Mobile).Distinct())
             {
-                Item item = new MercutiosCutlass();
+                if (m is PlayerMobile)
+                {
+                    PlayerMobile pm = m as PlayerMobile;
 
-                Container pack = killer.Backpack;
+                    if (pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
+                    {
+						Item item = new MercutiosCutlass();
+						
+                        if (m.Backpack == null || !m.Backpack.TryDropItem(m, item, false))
+                        {
+                            m.BankBox.DropItem(item);
+                        }
 
-                if (pack == null || !pack.TryDropItem(killer, item, false))
-                    killer.BankBox.DropItem(item);
-
-                killer.SendLocalizedMessage(1154489); // You received a Quest Item!
+                        m.SendLocalizedMessage(1154489); // You received a Quest Item!
+                    }
+                }
             }
 
-            return base.OnBeforeDeath();
+            if (Instances != null && Instances.Contains(this))
+                Instances.Remove(this);
+
+            base.OnDeath(c);
         }
 
         public static MercutioTheUnsavory Spawn(Point3D platLoc, Map platMap)
         {
-            if (m_Instances.Count > 0)
+            if (Instances != null && Instances.Count > 0)
                 return null;
 
             MercutioTheUnsavory creature = new MercutioTheUnsavory();
@@ -78,7 +118,12 @@ namespace Server.Mobiles
             : base(serial)
         {
         }
-        
+
+        public override void GenerateLoot()
+        {
+            AddLoot(LootPack.Average);
+        }
+
         public class InternalSelfDeleteTimer : Timer
         {
             private MercutioTheUnsavory Mare;
@@ -93,14 +138,14 @@ namespace Server.Mobiles
                 if (Mare.Map != Map.Internal)
                 {
                     Mare.Delete();
-                    this.Stop();
+                    Stop();
                 }
             }
         }
 
         public override void OnAfterDelete()
         {
-            m_Instances.Remove(this);
+            Instances.Remove(this);
 
             base.OnAfterDelete();
         }
@@ -110,7 +155,7 @@ namespace Server.Mobiles
             base.OnGotMeleeAttack(attacker);
 
             if (0.1 >= Utility.RandomDouble())
-                this.SpawnBrigand(attacker);
+                SpawnBrigand(attacker);
         }
 
         public override void OnGaveMeleeAttack(Mobile defender)
@@ -118,28 +163,32 @@ namespace Server.Mobiles
             base.OnGaveMeleeAttack(defender);
 
             if (0.1 >= Utility.RandomDouble())
-                this.SpawnBrigand(defender);
+                SpawnBrigand(defender);
         }
 
         #region Helpers
         public void SpawnBrigand(Mobile target)
         {
-            Map map = this.Map;
+            Map map = Map;
 
             if (map == null)
                 return;
 
             int brigands = 0;
 
-            foreach (Mobile m in this.GetMobilesInRange(10))
+            IPooledEnumerable eable = GetMobilesInRange(10);
+
+            foreach (Mobile m in eable)
             {
                 if (m is Brigand)
                     ++brigands;
             }
 
+            eable.Free();
+
             if (brigands < 16)
             {
-                this.PlaySound(0x3D);
+                PlaySound(0x3D);
 
                 int newBrigands = Utility.RandomMinMax(3, 6);
 
@@ -147,24 +196,23 @@ namespace Server.Mobiles
                 {
                     BaseCreature brigand = new Brigand();
 
-                    brigand.Team = this.Team;
+                    brigand.Team = Team;
 
                     bool validLocation = false;
-                    Point3D loc = this.Location;
+                    Point3D loc = Location;
 
                     for (int j = 0; !validLocation && j < 10; ++j)
                     {
-                        int x = this.X + Utility.Random(3) - 1;
-                        int y = this.Y + Utility.Random(3) - 1;
+                        int x = X + Utility.Random(3) - 1;
+                        int y = Y + Utility.Random(3) - 1;
                         int z = map.GetAverageZ(x, y);
 
-                        if (validLocation = map.CanFit(x, y, this.Z, 16, false, false))
-                            loc = new Point3D(x, y, this.Z);
+                        if (validLocation = map.CanFit(x, y, Z, 16, false, false))
+                            loc = new Point3D(x, y, Z);
                         else if (validLocation = map.CanFit(x, y, z, 16, false, false))
                             loc = new Point3D(x, y, z);
                     }
 
-                    m_Instances.Add(brigand);
                     brigand.MoveToWorld(loc, map);
                     brigand.Combatant = target;
                 }
@@ -183,6 +231,9 @@ namespace Server.Mobiles
         {
             base.Deserialize(reader);
             int version = reader.ReadInt();
+
+            Instances = new List<MercutioTheUnsavory>();
+            Instances.Add(this);
 
             Timer SelfDeleteTimer = new InternalSelfDeleteTimer(this);
             SelfDeleteTimer.Start();

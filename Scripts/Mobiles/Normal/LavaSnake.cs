@@ -41,8 +41,6 @@ namespace Server.Mobiles
 
             VirtualArmor = 24;
 
-            QLPoints = 2;
-
             PackItem(new SulfurousAsh());
         }
 
@@ -69,13 +67,6 @@ namespace Server.Mobiles
         public override void GenerateLoot()
         {
             AddLoot(LootPack.Poor);
-        }
-
-        public override void OnDeath(Container c)
-        {
-            base.OnDeath(c);
-
-            SARegionDrops.GetSADrop(c);
         }
 
         public override void Serialize(GenericWriter writer)

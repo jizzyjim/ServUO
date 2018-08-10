@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - AnimalTaming.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections;
@@ -110,9 +104,8 @@ namespace Server.SkillHandlers
 		{
 			for (int i = 0; i < bc.Skills.Length; ++i)
 			{
+                bc.Skills[i].Cap = Math.Max(100.0, bc.Skills[i].Base * capScalar);
 				bc.Skills[i].Base *= scalar;
-
-				bc.Skills[i].Cap = Math.Max(100.0, bc.Skills[i].Cap * capScalar);
 
 				if (bc.Skills[i].Base > bc.Skills[i].Cap)
 				{
@@ -128,14 +121,6 @@ namespace Server.SkillHandlers
 			public InternalTarget()
 				: base(Core.AOS ? 3 : 2, false, TargetFlags.None)
 			{ }
-
-			public virtual void ResetPacify(object obj)
-			{
-				if (obj is BaseCreature)
-				{
-					((BaseCreature)obj).BardPacified = true;
-				}
-			}
 
 			protected override void OnTargetFinish(Mobile from)
 			{
@@ -193,7 +178,7 @@ namespace Server.SkillHandlers
 							creature.PrivateOverheadMessage(MessageType.Regular, 0x3B2, 1054025, from.NetState);
 								// You must subdue this creature before you can tame it!
 						}
-						else if (CheckMastery(from, creature) || from.Skills[SkillName.AnimalTaming].Value >= creature.MinTameSkill)
+						else if (CheckMastery(from, creature) || from.Skills[SkillName.AnimalTaming].Value >= creature.CurrentTameSkill)
 						{
 							FactionWarHorse warHorse = creature as FactionWarHorse;
 
@@ -221,16 +206,19 @@ namespace Server.SkillHandlers
 								creature.PlaySound(creature.GetAngerSound());
 								creature.Direction = creature.GetDirectionTo(from);
 
-								if (creature.BardPacified && Utility.RandomDouble() > .24)
-								{
-									Timer.DelayCall(TimeSpan.FromSeconds(2.0), new TimerStateCallback(ResetPacify), creature);
-								}
-								else
-								{
-									creature.BardEndTime = DateTime.UtcNow;
-								}
+                                if (!Core.SA)
+                                {
+                                    if (creature.BardPacified && Utility.RandomDouble() > .24)
+                                    {
+                                        Timer.DelayCall(TimeSpan.FromSeconds(2.0), () => creature.BardPacified = true);
+                                    }
+                                    else
+                                    {
+                                        creature.BardEndTime = DateTime.UtcNow;
+                                    }
 
-								creature.BardPacified = false;
+                                    creature.BardPacified = false;
+                                }
 
 								if (creature.AIObject != null)
 								{
@@ -408,7 +396,7 @@ namespace Server.SkillHandlers
 							m_Tamer.CheckTargetSkill(SkillName.AnimalLore, m_Creature, 0.0, 120.0);
 						}
 
-						double minSkill = m_Creature.MinTameSkill + (m_Creature.Owners.Count * 6.0);
+						double minSkill = m_Creature.CurrentTameSkill + (m_Creature.Owners.Count * 6.0);
 
 						if (minSkill > -24.9 && CheckMastery(m_Tamer, m_Creature))
 						{
@@ -443,14 +431,6 @@ namespace Server.SkillHandlers
 								{
 									ScaleStats(m_Creature, 0.50);
 								}
-
-                                foreach (Skill sk in m_Creature.Skills)
-                                {
-                                    if (sk.Base > 100)
-                                        sk.Cap = sk.Base;
-                                    else
-                                        sk.Cap = 100;
-                                }
 							}
 
 							if (alreadyOwned)
@@ -468,6 +448,8 @@ namespace Server.SkillHandlers
 							m_Creature.IsBonded = false;
 
                             m_Creature.OnAfterTame(m_Tamer);
+
+                            PetTrainingHelper.GetAbilityProfile(m_Creature, true).OnTame();
 						}
 						else
 						{

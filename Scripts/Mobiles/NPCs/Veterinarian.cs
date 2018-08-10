@@ -1,5 +1,3 @@
-// https://raw.githubusercontent.com/xrunuo/xrunuo/fb47846ac232194065eba29479439d56cfc47a0f/Scripts/Distro/Mobiles/Vendors/NPC/Veterinarian.cs
-// Thanks to xrunuo. Modified for ServUO
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -35,20 +33,33 @@ namespace Server.Mobiles
 		public static BaseCreature[] GetDeadPets(Mobile from)
 		{
 			List<BaseCreature> pets = new List<BaseCreature>();
+            IPooledEnumerable eable = from.GetMobilesInRange(12);
 
-			foreach (Mobile m in from.GetMobilesInRange(12))
+			foreach (Mobile m in eable)
 			{
 				BaseCreature bc = m as BaseCreature;
 
 				if (bc != null && bc.IsDeadBondedPet && bc.ControlMaster == from && from.InLOS(bc))
 					pets.Add(bc);
 			}
+            eable.Free();
+
+            if (from.Backpack != null)
+            {
+                BrokenAutomatonHead head = from.Backpack.FindItemByType(typeof(BrokenAutomatonHead)) as BrokenAutomatonHead;
+
+                if (head != null && head.Automaton != null && !head.Automaton.Deleted)
+                    pets.Add(head.Automaton);
+            }
 
 			return pets.ToArray();
 		}
 
 		public static int GetResurrectionFee(BaseCreature bc)
 		{
+            if (bc is KotlAutomaton)
+                return 0;
+
 			int fee = (int)(100 + Math.Pow(1.1041, bc.MinTameSkill));
 
 			if (fee > 30000)
@@ -211,6 +222,9 @@ namespace Server.Mobiles
 
 									for (int j = 0; j < pet.Skills.Length; ++j) // Decrease all skills on pet.
 										pet.Skills[j].Base -= 0.2;
+
+                                    if (pet.Map == Map.Internal)
+                                        pet.MoveToWorld(from.Location, from.Map);
 
 									from.SendLocalizedMessage(1060398, fee.ToString()); // ~1_AMOUNT~ gold has been withdrawn from your bank box.
 									from.SendLocalizedMessage(1060022, Banker.GetBalance(from).ToString(), 0x16); // You have ~1_AMOUNT~ gold in cash remaining in your bank box.

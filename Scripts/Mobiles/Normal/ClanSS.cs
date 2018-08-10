@@ -6,7 +6,6 @@ namespace Server.Mobiles
     [CorpseName("a clan scratch scrounger corpse")]
     public class ClanSS : BaseCreature
     {
-        //public override InhumanSpeech SpeechType{ get{ return InhumanSpeech.Ratman; } }
         [Constructable]
         public ClanSS()
             : base(AIType.AI_Archer, FightMode.Closest, 10, 1, 0.2, 0.4)
@@ -40,7 +39,6 @@ namespace Server.Mobiles
             this.Karma = -6500;
 
             this.VirtualArmor = 56;
-            this.QLPoints = 3;
 
             this.AddItem(new Bow());
             this.PackItem(new Arrow(Utility.RandomMinMax(50, 70)));
@@ -75,29 +73,6 @@ namespace Server.Mobiles
         public override void GenerateLoot()
         {
             this.AddLoot(LootPack.Rich, 2);
-        }
-
-        public override void OnDeath(Container c)
-        {
-
-            base.OnDeath(c);
-            Region reg = Region.Find(c.GetWorldLocation(), c.Map);
-            if (0.25 > Utility.RandomDouble() && reg.Name == "Cavern of the Discarded")
-            {
-                switch (Utility.Random(10))
-                {
-                    case 0: c.DropItem(new AbyssalCloth()); break;
-                    case 1: c.DropItem(new PowderedIron()); break;
-                    case 2: c.DropItem(new CrystallineBlackrock()); break;
-                    case 3: c.DropItem(new EssenceBalance()); break;
-                    case 4: c.DropItem(new CrystalShards()); break;
-                    case 5: c.DropItem(new ArcanicRuneStone()); break;
-                    case 6: c.DropItem(new DelicateScales()); break;
-                    case 7: c.DropItem(new SeedRenewal()); break;
-                    case 8: c.DropItem(new CrushedGlass()); break;
-                    case 9: c.DropItem(new ElvenFletchings()); break;
-                }
-            }
         }
       
         public override void Serialize(GenericWriter writer)

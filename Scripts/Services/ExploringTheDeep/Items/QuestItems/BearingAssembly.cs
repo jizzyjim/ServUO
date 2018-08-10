@@ -11,7 +11,14 @@ namespace Server.Items
             : base(0xE74)
         {
             this.Weight = 1.0;
-            LootType = LootType.Blessed;
+            this.LootType = LootType.Blessed;
+        }
+		
+		public override void GetProperties(ObjectPropertyList list)
+        {
+            base.GetProperties(list);
+
+            list.Add(1072351); // Quest Item
         }
 
         public override int Lifespan { get { return 18000; } }
@@ -19,13 +26,6 @@ namespace Server.Items
         public BearingAssembly(Serial serial)
             : base(serial)
         {
-        }
-
-        public override void GetProperties(ObjectPropertyList list)
-        {
-            base.GetProperties(list);
-
-            list.Add(1072351); // Quest Item
         }
 
         public override void Serialize(GenericWriter writer)

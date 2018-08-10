@@ -37,8 +37,8 @@ namespace Server.Items
                         from.SendLocalizedMessage(502406); // This book needs time to recharge.
                         return;
                     }
-
-                    from.SendGump(new RunicAtlasGump((PlayerMobile)from, this));
+                    
+                    BaseGump.SendGump(new RunicAtlasGump((PlayerMobile)from, this));
                     Openers.Add(from);
                 }
                 else
@@ -57,13 +57,16 @@ namespace Server.Items
 
                 RunicAtlasGump g = from.FindGump(typeof(RunicAtlasGump)) as RunicAtlasGump;
 
-                if (g != null)
+                if (g != null && g.Atlas == this)
                 {
                     g.Page = newPage;
                     g.Refresh();
                 }
                 else
                 {
+                    if (g != null)
+                        from.CloseGump(typeof(RunicAtlasGump));
+
                     g = new RunicAtlasGump((PlayerMobile)from, this);
                     g.Page = newPage;
                     from.SendGump(g);
@@ -73,7 +76,7 @@ namespace Server.Items
             return d;
         }
 
-        public override int OnCraft(int quality, bool makersMark, Mobile from, Server.Engines.Craft.CraftSystem craftSystem, Type typeRes, BaseTool tool, Server.Engines.Craft.CraftItem craftItem, int resHue)
+        public override int OnCraft(int quality, bool makersMark, Mobile from, Server.Engines.Craft.CraftSystem craftSystem, Type typeRes, ITool tool, Server.Engines.Craft.CraftItem craftItem, int resHue)
         {
             if (makersMark)
                 Crafter = from;
@@ -109,7 +112,7 @@ namespace Server.Items
 		}
 	}
 
-    public class RunicAtlasGump : Gump
+    public class RunicAtlasGump : BaseGump
 	{
 		public static string ToCoordinates(Point3D location, Map map)
 		{
@@ -118,35 +121,21 @@ namespace Server.Items
 
 			bool valid = Sextant.Format(location, map, ref xLong, ref yLat, ref xMins, ref yMins, ref xEast, ref ySouth);
 
-			return valid ? String.Format("{0}° {1}'{2}, {3}° {4}'{5}", yLat, yMins, ySouth ? "S" : "N", xLong, xMins, xEast ? "E" : "W") : "unknown";
+			return valid ? String.Format("{0}Â° {1}'{2}, {3}Â° {4}'{5}", yLat, yMins, ySouth ? "S" : "N", xLong, xMins, xEast ? "E" : "W") : "unknown";
 		}
 
         public RunicAtlas Atlas { get; set; }
-        public PlayerMobile User { get; set; }
         public int Selected { get { return Atlas == null ? -1 : Atlas.Selected; } }
         public int Page { get; set; }
 
         public RunicAtlasGump(PlayerMobile pm, RunicAtlas atlas)
-            : base(150, 200)
+            : base(pm, 150, 200)
         {
             Atlas = atlas;
-            User = pm;
             Page = 0;
-
-            AddGumpLayout();
         }
 
-        public void Refresh()
-        {
-            Entries.Clear();
-            Entries.TrimExcess();
-            AddGumpLayout();
-
-            User.CloseGump(this.GetType());
-            User.SendGump(this, false);
-        }
-
-        public void AddGumpLayout()
+        public override void AddGumpLayout()
         {
             AddImage(0, 0, 39923);
 
@@ -161,7 +150,7 @@ namespace Server.Items
             for (int i = startIndex; i < startIndex + 16; i++)
             {
                 string desc;
-				int hue;
+				        int hue;
 
                 if (i < Atlas.Entries.Count)
                 {
@@ -229,9 +218,9 @@ namespace Server.Items
             }
         }
 
-        public override void OnResponse(NetState state, RelayInfo info)
+        public override void OnResponse(RelayInfo info)
         {
-            if (info.ButtonID >= 100)
+            if (info.ButtonID >= 100 && info.ButtonID < 1000)
             {
                 SelectEntry(info.ButtonID - 100);
             }
@@ -318,6 +307,10 @@ namespace Server.Items
 
                 Atlas.OnTravel();
                 new RecallSpell(User, null, e, null).Cast();
+            }
+            else
+            {
+                User.SendLocalizedMessage(500015); // You do not have that spell!
             }
 
             Atlas.Openers.Remove(User);

@@ -22,15 +22,24 @@ namespace Server.Spells.SkillMasteries
 
         public override double RequiredSkill { get { return 90; } }
         public override int RequiredMana { get { return 40; } }
+
         public override SkillName CastSkill { get { return SkillName.Chivalry; } }
+        public override SkillName DamageSkill { get { return SkillName.Chivalry; } }
 
         public int RequiredTithing { get { return 100; } }
 
         public override bool DelayedDamage { get { return true; } }
 
+        public override TimeSpan CastDelayBase { get { return TimeSpan.FromSeconds(2.5); } }
+
         public HolyFistSpell(Mobile caster, Item scroll)
             : base(caster, scroll, m_Info)
         {
+        }
+
+        public override void SendCastEffect()
+        {
+            Caster.FixedEffect(0x37C4, 87, (int)(GetCastDelay().TotalSeconds * 28), 4, 3);
         }
 
         public override bool CheckCast()
@@ -51,35 +60,63 @@ namespace Server.Spells.SkillMasteries
 
         protected override void OnTarget(object o)
         {
-            Mobile m = o as Mobile;
+            IDamageable m = o as IDamageable;
 
             if (m != null)
             {
                 if (CheckHSequence(m))
                 {
+                    IDamageable target = m;
+                    IDamageable source = Caster;
+
+                    SpellHelper.Turn(Caster, target);
+
+                    if (SpellHelper.CheckReflect(0, ref source, ref target))
+                    {
+                        Server.Timer.DelayCall(TimeSpan.FromSeconds(.5), () =>
+                        {
+                            source.MovingParticles(target, 0x9BB5, 7, 0, false, true, 9502, 4019, 0x160);
+                            source.PlaySound(0x5CE);
+                        });
+                    }
+
                     double skill = (Caster.Skills[CastSkill].Value + GetWeaponSkill() + (GetMasteryLevel() * 40)) / 3;
                     double damage = skill + (double)Caster.Karma / 1000;
+
+                    damage += Utility.RandomMinMax(0, 5);
 
                     if (m is BaseCreature && IsUndead((BaseCreature)m))
                         damage *= 1.5;
                     else if (m is PlayerMobile)
-                        damage /= 2;
+                        damage = Math.Min(35, damage);
 
                     Caster.MovingParticles(m, 0x9BB5, 7, 0, false, true, 9502, 4019, 0x160);
                     Caster.PlaySound(0x5CE);
 
-                    SpellHelper.Damage(this, m, damage, 0, 0, 0, 0, 100);
-
-                    if (!CheckResisted(m) && m.NetState != null)
+                    if (m is Mobile)
                     {
-                        if (!TransformationSpellHelper.UnderTransformation(m, typeof(AnimalForm)))
-                            m.Send(SpeedControl.WalkSpeed);
+                        damage *= GetDamageScalar((Mobile)m);
+                    }
+
+                    int sdiBonus = SpellHelper.GetSpellDamageBonus(Caster, m, CastSkill, m is Mobile ? Caster.Player && ((Mobile)m).Player : false);
+
+                    damage *= (100 + sdiBonus);
+                    damage /= 100;
+
+                    SpellHelper.Damage(this, target, damage, 0, 0, 0, 0, 100);
+
+                    if (target is Mobile && !CheckResisted((Mobile)target) && ((Mobile)target).NetState != null)
+                    {
+                        Mobile mob = target as Mobile;
+
+                        if (!TransformationSpellHelper.UnderTransformation(mob, typeof(AnimalForm)))
+                            mob.SendSpeedControl(SpeedControlType.WalkSpeed);
 
                         Server.Timer.DelayCall(TimeSpan.FromSeconds(skill / 60), () =>
                             {
-                                if (!TransformationSpellHelper.UnderTransformation(m, typeof(AnimalForm)) &&
-                                    !TransformationSpellHelper.UnderTransformation(m, typeof(Server.Spells.Spellweaving.ReaperFormSpell)))
-                                    m.Send(SpeedControl.Disable);
+                                if (!TransformationSpellHelper.UnderTransformation(mob, typeof(AnimalForm)) &&
+                                    !TransformationSpellHelper.UnderTransformation(mob, typeof(Server.Spells.Spellweaving.ReaperFormSpell)))
+                                    mob.SendSpeedControl(SpeedControlType.Disable);
                             });
                     }
                 }

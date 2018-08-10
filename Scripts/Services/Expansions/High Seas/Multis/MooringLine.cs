@@ -33,10 +33,24 @@ namespace Server.Items
             bool canMove = false;
 
             if (m_Boat != null)
+            {
+                if (m_Boat.Owner == from && m_Boat.Status > 1043010)
+                {
+                    from.SendLocalizedMessage(1043294); // Your ship's age and contents have been refreshed.
+                }
+
                 m_Boat.Refresh();
+            }
 
             if (boat != null && m_Boat != boat)
+            {
+                if (boat.Owner == from && boat.Status > 1043010)
+                {
+                    from.SendLocalizedMessage(1043294); // Your ship's age and contents have been refreshed.
+                }
+
                 boat.Refresh();
+            }
 
             if (!from.InRange(this.Location, range))
                 from.SendLocalizedMessage(500295); //You are too far away to do that.
@@ -65,7 +79,7 @@ namespace Server.Items
                 {
                     if (!from.Alive)
                         from.SendLocalizedMessage(1060190); //You cannot do that while dead!
-                    else if (boat is BaseGalleon && m_Boat is RowBoat && ((RowBoat)m_Boat).HasAccess(from))
+                    else if (m_Boat is RowBoat && ((RowBoat)m_Boat).HasAccess(from))
                         canMove = true;
                     else if (boat is RowBoat && m_Boat is BaseGalleon && ((BaseGalleon)m_Boat).HasAccess(from))
                         canMove = true;
@@ -80,6 +94,8 @@ namespace Server.Items
             {
                 BaseCreature.TeleportPets(from, this.Location, this.Map);
                 from.MoveToWorld(this.Location, this.Map);
+
+                m_Boat.SendContainerPacket();
             }
         }
 
@@ -192,7 +208,7 @@ namespace Server.Items
 
             Map map = from.Map;
 
-            if (Server.Spells.SpellHelper.CheckMulti(p, map) || Region.Find(p, map).IsPartOf(typeof(Factions.StrongholdRegion)))
+            if (Server.Spells.SpellHelper.CheckMulti(p, map) || Region.Find(p, map).IsPartOf<Factions.StrongholdRegion>())
                 return false;
 
             StaticTile[] staticTiles = map.Tiles.GetStaticTiles(x, y, true);

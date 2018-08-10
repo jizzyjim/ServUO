@@ -23,7 +23,7 @@ namespace Server.Mobiles
         }
 
 		public override bool CanBeParagon { get { return false; } }
-        public virtual bool DropPrimer { get { return true; } }
+        public virtual bool DropPrimer { get { return Core.TOL; } }
 
         public override bool Unprovokable
         {
@@ -49,7 +49,7 @@ namespace Server.Mobiles
         {
             base.OnThink();
 			
-            if (this.HasFireRing && this.Combatant != null && this.Alive && this.Hits > 0.8 * this.HitsMax && this.m_NextFireRing < DateTime.UtcNow && Utility.RandomDouble() < this.FireRingChance)
+            if (this.HasFireRing && this.Combatant != null && this.Alive && this.Hits > 0.8 * this.HitsMax && this.m_NextFireRing > Core.TickCount && Utility.RandomDouble() < this.FireRingChance)
                 this.FireRing();
 				
             if (this.CanSpawnHelpers && this.Combatant != null && this.Alive && this.CanSpawnWave())
@@ -80,6 +80,11 @@ namespace Server.Mobiles
                 }
             }
 
+            if (GivesMLMinorArtifact && 0.5 > Utility.RandomDouble())
+            {
+                MondainsLegacy.DropPeerlessMinor(c);
+            }
+
             if (this.m_Altar != null)
                 this.m_Altar.OnPeerlessDeath();
         }
@@ -87,7 +92,7 @@ namespace Server.Mobiles
         public BasePeerless(AIType aiType, FightMode fightMode, int rangePerception, int rangeFight, double activeSpeed, double passiveSpeed)
             : base(aiType, fightMode, rangePerception, rangeFight, activeSpeed, passiveSpeed)
         {
-            this.m_NextFireRing = DateTime.UtcNow + TimeSpan.FromSeconds(10);			
+            this.m_NextFireRing = Core.TickCount + 10000;			
             this.m_CurrentWave = this.MaxHelpersWaves;
         }
 		
@@ -274,7 +279,7 @@ namespace Server.Mobiles
             }
         }
 		
-        private DateTime m_NextFireRing = DateTime.UtcNow;
+        private long m_NextFireRing = Core.TickCount;
 		
         public virtual void FireRing()
         {
@@ -306,7 +311,7 @@ namespace Server.Mobiles
                 Effects.SendLocationEffect(po, this.Map, 0x3E31, 50);
             }
 			
-            this.m_NextFireRing = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            this.m_NextFireRing = Core.TickCount + 10000;
         }
         #endregion
     }

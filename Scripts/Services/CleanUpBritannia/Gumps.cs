@@ -2,6 +2,7 @@ using Server;
 using System;
 using Server.Mobiles;
 using Server.Gumps;
+using Server.Items;
 using Server.Engines.Points;
 
 namespace Server.Engines.CleanUpBritannia
@@ -24,16 +25,24 @@ namespace Server.Engines.CleanUpBritannia
         {
         }
 
-        public override int GetPoints(Mobile m)
+        public override double GetPoints(Mobile m)
         {
-            return (int)PointsSystem.CleanUpBritannia.GetPoints(m);
+            return PointsSystem.CleanUpBritannia.GetPoints(m);
         }
 
-        public override void OnConfirmed(CollectionItem citem, int index)
+        public override void RemovePoints(double points)
         {
-            base.OnConfirmed(citem, index);
+            PointsSystem.CleanUpBritannia.DeductPoints(User, points);
+        }
 
-            PointsSystem.CleanUpBritannia.DeductPoints(User, citem.Points);
+        public override void OnItemCreated(Item item)
+        {
+            if (item is ScrollofAlacrity)
+            {
+                ((ScrollofAlacrity)item).Skill = (SkillName)Utility.Random(SkillInfo.Table.Length);
+            }
+
+            item.InvalidateProperties();
         }
     }
 }

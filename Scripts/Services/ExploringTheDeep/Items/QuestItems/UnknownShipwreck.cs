@@ -13,18 +13,18 @@ namespace Server.Items
             this.Weight = 1.0;
             this.LootType = LootType.Blessed;
         }
+		
+		public override void GetProperties(ObjectPropertyList list)
+        {
+            base.GetProperties(list);
+
+            list.Add(1072351); // Quest Item
+        }
 
         public override int Lifespan { get { return 3600; } }
 
         public UnknownShipwreck(Serial serial) : base(serial)
         {
-        }
-
-        public override void GetProperties(ObjectPropertyList list)
-        {
-            base.GetProperties(list);
-
-            list.Add(1072351); // Quest Item
         }
 
         public override void OnDoubleClick(Mobile from)

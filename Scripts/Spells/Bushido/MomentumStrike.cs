@@ -41,17 +41,17 @@ namespace Server.Spells.Bushido
             BaseWeapon weapon = attacker.Weapon as BaseWeapon;
 
             List<Mobile> targets = new List<Mobile>();
+            IPooledEnumerable eable = attacker.GetMobilesInRange(weapon.MaxRange);
 
-            foreach (Mobile m in attacker.GetMobilesInRange(weapon.MaxRange))
+            foreach (Mobile m in eable)
             {
-                if (m == defender)
-                    continue;
-
-                if (m.Combatant != attacker)
-                    continue;
-
-                targets.Add(m);
+                if (m != defender && m != attacker && m.CanBeHarmful(attacker, false) && attacker.InLOS(m) && 
+                    Server.Spells.SpellHelper.ValidIndirectTarget(attacker, m))
+                {
+                    targets.Add(m);
+                }
             }
+            eable.Free();
 
             if (targets.Count > 0)
             {
@@ -73,6 +73,9 @@ namespace Server.Spells.Bushido
                 attacker.PlaySound(0x510);
 
                 weapon.OnSwing(attacker, target, damageBonus);
+
+                if (defender.Alive)
+                    attacker.Combatant = defender;
 
                 this.CheckGain(attacker);
             }

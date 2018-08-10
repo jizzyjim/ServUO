@@ -1,4 +1,4 @@
-﻿using Server.Mobiles;
+using Server.Mobiles;
 using Server.Network;
 using System;
 
@@ -7,16 +7,25 @@ namespace Server.Items
     public class WoodenKeyBarrel : DamageableItem
     {
         private Parts m_key;
+        private StorageLocker m_StorageLocker;
         public override int LabelNumber { get { return 1023703; } } // barrel
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public StorageLocker StorageLocker
+        {
+            get { return m_StorageLocker; }
+            set { m_StorageLocker = value; }
+        }
 
         [Constructable]
         public WoodenKeyBarrel(Parts key)
             : base(0x0FAE, 0x0FAE)
         {
+            Name = "barrel";
             m_key = key;
-            this.Level = ItemLevel.VeryEasy;
-            this.Movable = false;
-            this.HitsMax = 60;
+            Level = ItemLevel.VeryEasy;
+            Movable = false;
+            HitsMax = 60;
         }
 
         public WoodenKeyBarrel(Serial serial)
@@ -29,6 +38,7 @@ namespace Server.Items
             if (m_key != Parts.None)
             {
                 (new LockerKey(m_key)).MoveToWorld(new Point3D(base.Location), base.Map);
+                m_StorageLocker.BeginRestart(TimeSpan.FromMinutes(10.0));
             }
             else
             {
@@ -54,32 +64,32 @@ namespace Server.Items
                             {
                                 case 0:
                                     {
-                                        (new SeaSnake()).MoveToWorld(new Point3D(this.Location), this.Map);
+                                        (new SeaSnake()).MoveToWorld(new Point3D(Location), Map);
                                         break;
                                     }
                                 case 1:
                                     {
-                                        (new ShipRat()).MoveToWorld(new Point3D(this.Location), this.Map);
+                                        (new ShipRat()).MoveToWorld(new Point3D(Location), Map);
                                         break;
                                     }
                                 case 2:
                                     {
-                                        (new ShipBat()).MoveToWorld(new Point3D(this.Location), this.Map);
+                                        (new ShipBat()).MoveToWorld(new Point3D(Location), Map);
                                         break;
                                     }
                                 case 3:
                                     {
-                                        (new ShipBat()).MoveToWorld(new Point3D(this.Location), this.Map);
+                                        (new ShipBat()).MoveToWorld(new Point3D(Location), Map);
                                         break;
                                     }
                                 case 4:
                                     {
-                                        (new ShipRat()).MoveToWorld(new Point3D(this.Location), this.Map);
+                                        (new ShipRat()).MoveToWorld(new Point3D(Location), Map);
                                         break;
                                     }
                                 case 5:
                                     {
-                                        (new SeaSnake()).MoveToWorld(new Point3D(this.Location), this.Map);
+                                        (new SeaSnake()).MoveToWorld(new Point3D(Location), Map);
                                         break;
                                     }
                                 default: break;
@@ -89,13 +99,13 @@ namespace Server.Items
                 }
 
                 if (Utility.RandomDouble() < 0.05)
-                    (new BarrelHoops()).MoveToWorld(new Point3D(this.Location), this.Map);
+                    (new BarrelHoops()).MoveToWorld(new Point3D(Location), Map);
                 if (Utility.RandomDouble() < 0.05)
-                    (new BarrelStaves()).MoveToWorld(new Point3D(this.Location), this.Map);
+                    (new BarrelStaves()).MoveToWorld(new Point3D(Location), Map);
                 if (Utility.RandomDouble() < 0.05)
-                    (new BarrelLid()).MoveToWorld(new Point3D(this.Location), this.Map);
+                    (new BarrelLid()).MoveToWorld(new Point3D(Location), Map);
                 if (Utility.RandomDouble() < 0.05)
-                    (new CopperWire()).MoveToWorld(new Point3D(this.Location), this.Map);
+                    (new CopperWire()).MoveToWorld(new Point3D(Location), Map);
             }
 
             return true;
@@ -104,27 +114,52 @@ namespace Server.Items
         public override void Serialize(GenericWriter writer)
         {
             base.Serialize(writer);
-            writer.Write((int)0); //version
+            writer.Write((int)1); //version
+
+            writer.Write((int)m_key);
+            writer.Write(m_StorageLocker);
         }
 
         public override void Deserialize(GenericReader reader)
         {
             base.Deserialize(reader);
             int version = reader.ReadInt();
+
+            switch (version)
+            {
+                case 1:
+                    {
+                        m_key = (Parts)reader.ReadInt();
+                        m_StorageLocker = (StorageLocker)reader.ReadItem();
+
+                        break;
+                    }
+            }            
         }
     }
 
     public class WoodenToMetalBarrel : DamageableItem
     {
         public override int LabelNumber { get { return 1023703; } } // barrel
+        private StorageLocker m_StorageLocker;
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public StorageLocker StorageLocker
+        {
+            get { return m_StorageLocker; }
+            set { m_StorageLocker = value; }
+        }
 
         [Constructable]
-        public WoodenToMetalBarrel()
+        public WoodenToMetalBarrel(StorageLocker item)
             : base(0x0FAE, 0x0FAE)
         {
-            this.Level = ItemLevel.VeryEasy;
-            this.Movable = false;
-            this.HitsMax = 60;
+            Name = "barrel";
+
+            Level = ItemLevel.VeryEasy;
+            Movable = false;
+            HitsMax = 60;
+            m_StorageLocker = item;
         }
 
         public WoodenToMetalBarrel(Serial serial)
@@ -136,7 +171,8 @@ namespace Server.Items
         {
             Item barrel = new MetalBarrel();
 
-            barrel.MoveToWorld(new Point3D(this.Location), this.Map);
+            m_StorageLocker.Barrels.Add(barrel);
+            barrel.MoveToWorld(new Point3D(Location), Map);
 
             return true;
         }
@@ -144,13 +180,25 @@ namespace Server.Items
         public override void Serialize(GenericWriter writer)
         {
             base.Serialize(writer);
-            writer.Write((int)0); //version
+            writer.Write((int)1); //version
+
+            writer.Write(m_StorageLocker);
         }
 
         public override void Deserialize(GenericReader reader)
         {
             base.Deserialize(reader);
             int version = reader.ReadInt();
+
+            switch (version)
+            {
+                case 1:
+                    {
+                        m_StorageLocker = (StorageLocker)reader.ReadItem();
+
+                        break;
+                    }
+            }
         }
     }
 
@@ -162,8 +210,8 @@ namespace Server.Items
         public MetalBarrel()
             : base(0x0FAE)
         {
-            this.Movable = false;
-            this.Hue = 2301;
+            Movable = false;
+            Hue = 2301;
         }
 
         public MetalBarrel(Serial serial)
@@ -190,7 +238,7 @@ namespace Server.Items
         public WoodKeyDebris()
             : base(0x0C2F)
         {
-            this.Movable = false;
+            Movable = false;
             new InternalTimer(this).Start();
         }
 
@@ -210,7 +258,7 @@ namespace Server.Items
             protected override void OnTick()
             {
                 m_Item.Delete();
-                this.Stop();
+                Stop();
             }
         }
 
@@ -346,7 +394,7 @@ namespace Server.Items
             Item g = n_SourceItem;
 
             // Explosion
-            if (g.Deleted || g == null)
+            if (g == null || g.Deleted)
                 return;
 
             Effects.SendLocationParticles(EffectItem.Create(g.Location, g.Map, EffectItem.DefaultDuration), 0x36BD, 9, 10, 5044);
@@ -356,7 +404,8 @@ namespace Server.Items
 
         public virtual void DoDamage(Item g, int mindmg, int maxdmg)
         {
-            foreach (Mobile m in g.GetMobilesInRange(4))
+            IPooledEnumerable eable = g.GetMobilesInRange(4);
+            foreach (Mobile m in eable)
             {
                 if (m != null)
                 {
@@ -370,6 +419,7 @@ namespace Server.Items
                     }
                 }                    
             }
+            eable.Free();
 
             n_SourceItem.Delete();
         }
@@ -449,7 +499,7 @@ namespace Server.Items
             Item g = n_SourceItem;
 
             //Poisonous Vapor
-            if (g.Deleted || g == null)
+            if (g == null || g.Deleted)
                 return;
 
             Effects.SendLocationParticles(EffectItem.Create(g.Location, g.Map, EffectItem.DefaultDuration), 0x376A, 9, 10, 5040);
@@ -459,10 +509,11 @@ namespace Server.Items
 
         public virtual void DoDamage(Item g, int mindmg, int maxdmg)
         {
-            if (g.Deleted || g == null)
+            if (g == null || g.Deleted)
                 return;
 
-            foreach (Mobile m in g.GetMobilesInRange(4))
+            IPooledEnumerable eable = g.GetMobilesInRange(4);
+            foreach (Mobile m in eable)
             {
                 if (m != null)
                 {
@@ -477,6 +528,7 @@ namespace Server.Items
                 }
             }
 
+            eable.Free();
             g.Delete();
         }
     }

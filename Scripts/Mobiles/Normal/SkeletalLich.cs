@@ -8,11 +8,6 @@ namespace Server.Mobiles
 	[CorpseName( "a skeletal corpse" )]
 	public class SkeletalLich : BaseCreature
 	{
-		public override WeaponAbility GetWeaponAbility()
-		{
-			return WeaponAbility.Dismount;
-		}
-
 		[Constructable]
 		public SkeletalLich() : base( AIType.AI_NecroMage, FightMode.Closest, 10, 1, 0.2, 0.4 )
 		{
@@ -51,31 +46,15 @@ namespace Server.Mobiles
 			Fame = 6000;
 			Karma = -6000;
 
-			VirtualArmor = 40;
-            QLPoints = 8;
+            VirtualArmor = 40; 
+            SetWeaponAbility(WeaponAbility.Dismount);
 		}
 
 		public override void GenerateLoot()
 		{
 			AddLoot( LootPack.FilthyRich, 2 );
 		}
-        public override void OnDeath(Container c)
-        {
 
-            base.OnDeath(c);
-            Region reg = Region.Find(c.GetWorldLocation(), c.Map);
-            if (0.25 > Utility.RandomDouble() && reg.Name == "The Lands of the Lich")
-            {
-                if (Utility.RandomDouble() < 0.6)
-                    c.DropItem(new EssenceDirection());
-            }
-            if (0.25 > Utility.RandomDouble() && reg.Name == "Skeletal Dragon")
-            {
-                if (Utility.RandomDouble() < 0.6)
-                    c.DropItem(new EssencePersistence());
-
-            }
-        }
 		public override bool BleedImmune{ get{ return true; } }
 		public override Poison PoisonImmune{ get{ return Poison.Lethal; } }
 

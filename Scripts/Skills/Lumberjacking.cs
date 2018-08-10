@@ -1,6 +1,7 @@
 using System;
 using Server.Items;
 using Server.Network;
+using System.Linq;
 
 namespace Server.Engines.Harvest
 {
@@ -63,7 +64,7 @@ namespace Server.Engines.Harvest
             lumber.ConsumedPerFeluccaHarvest = 20;
 
             // The chopping effect
-            lumber.EffectActions = new int[] { 13 };
+            lumber.EffectActions = new int[] { Core.SA ? 7 : 13 };
             lumber.EffectSounds = new int[] { 0x13E };
             lumber.EffectCounts = (Core.AOS ? new int[] { 1 } : new int[] { 1, 2, 2, 2, 3 });
             lumber.EffectDelay = TimeSpan.FromSeconds(1.6);
@@ -134,16 +135,30 @@ namespace Server.Engines.Harvest
             #endregion
         }
 
+        public override void SendSuccessTo(Mobile from, Item item, HarvestResource resource)
+        {
+            if (item != null)
+            {
+                foreach (var res in m_Definition.Resources.Where(r => r.Types != null))
+                {
+                    foreach (var type in res.Types)
+                    {
+                        if (item.GetType() == type)
+                        {
+                            res.SendSuccessTo(from);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            base.SendSuccessTo(from, item, resource);
+        }
+
         public override bool CheckHarvest(Mobile from, Item tool)
         {
             if (!base.CheckHarvest(from, tool))
                 return false;
-
-			if (tool.Parent != from && from.Backpack != null && ! tool.IsChildOf(from.Backpack))
-			{
-				from.SendLocalizedMessage(1080058); // This must be in your backpack to use it.
-				return false;
-			}
 
             return true;
         }
@@ -205,7 +220,7 @@ namespace Server.Engines.Harvest
         public override void OnHarvestStarted(Mobile from, Item tool, HarvestDefinition def, object toHarvest)
         {
             base.OnHarvestStarted(from, tool, def, toHarvest);
-			
+
             if (Core.ML)
                 from.RevealingAction();
         }

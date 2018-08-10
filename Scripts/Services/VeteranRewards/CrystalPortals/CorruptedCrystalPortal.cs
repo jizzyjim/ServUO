@@ -1,5 +1,7 @@
 #region References
 using System;
+using System.Collections.Generic;
+
 using Server.Factions;
 using Server.Gumps;
 using Server.Misc;
@@ -7,30 +9,32 @@ using Server.Mobiles;
 using Server.Network;
 using Server.Spells;
 using Server.Multis;
+using Server.ContextMenus;
 #endregion
 
 namespace Server.Items
 {
 	public class CorruptedCrystalPortal : Item, ISecurable
 	{
-		private SecureLevel m_Level;
+        public override int LabelNumber { get { return 1150074; } } // Corrupted Crystal Portal
+
+        private SecureLevel m_Level;
 		
 		[CommandProperty(AccessLevel.GameMaster)]
 		public SecureLevel Level 
 		{
-			get { return this.m_Level; }
-			set { this.m_Level = value; }
+			get { return m_Level; }
+			set { m_Level = value; }
 		}
 		
 		public override bool HandlesOnSpeech { get { return true; } }
 
 		[Constructable]
 		public CorruptedCrystalPortal()
+            : base(0x468A)
 		{
-			Name = "Corrupted Crystal Portal";
-			ItemID = 18059;
-			//Weight = 20;
-			Hue = 1164;
+            Hue = 2601;
+			Weight = 1.0;
 			Movable = true;
 			LootType = LootType.Blessed;
 		}
@@ -39,17 +43,36 @@ namespace Server.Items
 			: base(serial)
 		{ }
 
+        public override void GetContextMenuEntries(Mobile from, List<ContextMenuEntry> list)
+        {
+            base.GetContextMenuEntries(from, list);
+
+            SetSecureLevelEntry.AddTo(from, this, list);
+        }
+
 		public virtual bool ValidateUse(Mobile m, bool message)
 		{
-			if (Movable)
-			{
-				if (message)
-				{
-					m.SendMessage("This must be locked down in a house to use!");
-				}
+            BaseHouse house = BaseHouse.FindHouseAt(this);
 
-				return false;
-			}
+            if (house == null || !IsLockedDown)
+            {
+                if (message)
+                {
+                    m.SendMessage("This must be locked down in a house to use!");
+                }
+
+                return false;
+            }
+
+            if (!house.HasSecureAccess(m, m_Level))
+            {
+                if (message)
+                {
+                    m.SendLocalizedMessage(503301, "", 0x22); // You don't have permission to do that.
+                }
+
+                return false;
+            }
 
 			if (Sigil.ExistsOn(m))
 			{
@@ -118,19 +141,12 @@ namespace Server.Items
 			}
 		}
 
-		public override void GetProperties(ObjectPropertyList list)
-		{
-			base.GetProperties(list);
-
-			list.Add(Movable ? "This must be locked down in a house to use!" : "Double-click to open help menu");
-		}
-
 		public virtual void OnTeleport(Mobile m, Point3D loc, Map map)
 		{
 			if (m == null || loc == Point3D.Zero || map == null || map == Map.Internal)
 			{
 				return;
-			}
+			}		
 
 			Effects.SendLocationEffect(m.Location, m.Map, 0x3728, 10, 10);
 			Effects.PlaySound(m.Location, m.Map, 0x1FE);
@@ -152,9 +168,9 @@ namespace Server.Items
 			Point3D loc = Point3D.Zero;
 			Map map = null;
 
-			ResolveDest(e.Speech.Trim(), ref loc, ref map);
+			ResolveDest(e.Mobile, e.Speech.Trim(), ref loc, ref map);
 
-			if (loc == Point3D.Zero || map == null || map == Map.Internal)
+            if (loc == Point3D.Zero || map == null || map == Map.Internal || (Siege.SiegeShard && map == Map.Trammel))
 			{
 				return;
 			}
@@ -170,22 +186,26 @@ namespace Server.Items
 		public override void Serialize(GenericWriter writer)
 		{
 			base.Serialize(writer);
-
-			writer.Write(0); // version
+			writer.Write(1); // version
 			
-			writer.WriteEncodedInt((int)this.m_Level);
+			writer.WriteEncodedInt((int)m_Level);
 		}
 
 		public override void Deserialize(GenericReader reader)
 		{
 			base.Deserialize(reader);
+            int version = reader.ReadInt();
 
-			reader.ReadInt();
-			
-			this.m_Level = (SecureLevel)reader.ReadEncodedInt();
+            m_Level = (SecureLevel)reader.ReadEncodedInt();
+
+            if (version < 1)
+            {
+                ItemID = 0x468A;
+                Hue = 2601;
+            }
 		}
 
-		public static void ResolveDest(string name, ref Point3D loc, ref Map map)
+		public static void ResolveDest(Mobile m, string name, ref Point3D loc, ref Map map)
 		{
 			if (String.IsNullOrWhiteSpace(name))
 			{
@@ -297,15 +317,59 @@ namespace Server.Items
 						loc = new Point3D( 1732, 975, -75 );
 						map = Map.Malas;
 					}
-					break;
+                    break;
+                    case "dungeon prism":
+                    {
+                        loc = new Point3D(3786, 1095, 18);
+                        map = Map.Trammel;
+                    }
+                    break;
+                    case "dungeon sanctuary":
+                    {
+                        loc = new Point3D(761, 1644, 0);
+                        map = Map.Trammel;
+                    }
+                    break;
+                    case "dungeon palace":
+                    {
+                        loc = new Point3D(5624, 3040, 13);
+                        map = Map.Trammel;
+                    }
+                    break;
+                    case "dungeon grove":
+                    {
+                        loc = new Point3D(580, 1655, 0);
+                        map = Map.Trammel;
+                    }
+                    break;
+                    case "dungeon caves":
+                    {
+                        loc = new Point3D(1717, 2991, 0);
+                        map = Map.Trammel;
+                    }
+                    break;
+                    case "dungeon blackthorn":
+                    {
+                        loc = new Point3D(1482, 1474, 0);
+                        map = Map.Trammel;
+                    }
+                    break;
 					case "dungeon underworld":
 					{
-						loc = new Point3D( 1143, 1085, -37 );
-						map = Map.TerMur;
+						loc = new Point3D( 4195, 3263, 5 );
+						map = Map.Trammel;
 					}
 					break;
 					case "dungeon abyss":
 					{
+						PlayerMobile pm = m as PlayerMobile;
+
+						if (!pm.AbyssEntry)
+						{
+							m.SendLocalizedMessage(1112226);
+							break;
+						}
+						
 						loc = new Point3D( 946, 71, 72 );
 						map = Map.TerMur;
 					}
@@ -376,7 +440,43 @@ namespace Server.Items
 						loc = new Point3D( 1361, 895, 0 );
 						map = Map.Felucca;
 					}
-					break;
+                    break;
+                    case "fel dungeon prism":
+                    {
+                        loc = new Point3D(3786, 1095, 18);
+                        map = Map.Felucca;
+                    }
+                    break;
+                    case "fel dungeon sanctuary":
+                    {
+                        loc = new Point3D(761, 1644, 0);
+                        map = Map.Felucca;
+                    }
+                    break;
+                    case "fel dungeon palace":
+                    {
+                        loc = new Point3D(5624, 3040, 13);
+                        map = Map.Felucca;
+                    }
+                    break;
+                    case "fel dungeon grove":
+                    {
+                        loc = new Point3D(580, 1655, 0);
+                        map = Map.Felucca;
+                    }
+                    break;
+                    case "fel dungeon caves":
+                    {
+                        loc = new Point3D(1717, 2991, 0);
+                        map = Map.Felucca;
+                    }
+                    break;
+                    case "fel dungeon blackthorn":
+                    {
+                        loc = new Point3D(1520, 1418, 15);
+                        map = Map.Felucca;
+                    }
+                    break;
 			}
 		}
 	}

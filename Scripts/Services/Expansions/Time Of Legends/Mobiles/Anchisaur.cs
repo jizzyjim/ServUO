@@ -1,6 +1,8 @@
 using System;
-using Server;
 using Server.Items;
+using Server.Spells.SkillMasteries;
+using Server.Spells;
+using Server.Network;
 
 namespace Server.Mobiles
 {
@@ -8,6 +10,7 @@ namespace Server.Mobiles
     public class Anchisaur : BaseCreature
     {
         public override bool AttacksFocus { get { return true; } }
+        private DateTime _NextMastery;
 
         [Constructable]
         public Anchisaur()
@@ -33,14 +36,18 @@ namespace Server.Mobiles
 
             SetDamageType(ResistanceType.Physical, 100);
 
-            SetSkill(SkillName.MagicResist, 30.1, 43.5);
-            SetSkill(SkillName.Tactics, 30.1, 49.0);
-            SetSkill(SkillName.Wrestling, 40, 50);
-
-            PackItem(new DragonBlood(6));
+            SetSkill(SkillName.MagicResist, 105.0, 115.0);
+            SetSkill(SkillName.Tactics, 95.0, 105.0);
+            SetSkill(SkillName.Wrestling, 100.0, 110.0);
+            SetSkill(SkillName.Anatomy, 95.0, 105.0);
+            SetSkill(SkillName.DetectHidden, 75.0, 85.0);
+            SetSkill(SkillName.Parry, 75.0, 85.0);
 
             Fame = 8000;
             Karma = -8000;
+
+            SetWeaponAbility(WeaponAbility.Disarm);
+            SetWeaponAbility(WeaponAbility.ParalyzingBlow);
         }
 
         public override void GenerateLoot()
@@ -48,6 +55,30 @@ namespace Server.Mobiles
             AddLoot(LootPack.FilthyRich, 1);
         }
 
+        public override void OnThink()
+        {
+            base.OnThink();
+
+            if (Combatant == null)
+                return;
+
+            if (_NextMastery < DateTime.UtcNow)
+            {
+                if (SkillMasterySpell.HasSpell(this, typeof(RampageSpell)) || Utility.RandomDouble() > 0.5)
+                {
+                    SpecialMove.SetCurrentMove(this, SpellRegistry.GetSpecialMove(740));
+                }
+                else
+                {
+                    SkillMasterySpell spell = new RampageSpell(this, null);
+                    spell.Cast();
+                }
+
+                _NextMastery = DateTime.UtcNow + TimeSpan.FromSeconds(Utility.RandomMinMax(45, 70));
+            }           
+        }
+
+        public override int DragonBlood { get { return 6; } }
         public override int Meat { get { return 6; } }
         public override int Hides { get { return 11; } }
 

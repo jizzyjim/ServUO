@@ -46,19 +46,14 @@ namespace Server.Spells.SkillMasteries
                 m_PropertyBonus2 = (int)((BaseSkillBonus * 4) + (CollectiveBonus * 2));
                 m_DamageMod = ((BaseSkillBonus * 16) + (CollectiveBonus * 6)) / 100;
 
-                System.Collections.Generic.List<Mobile> list = GetParty();
-
-                foreach (Mobile m in list)
+                foreach (Mobile m in GetParty())
                 {
                     m.FixedParticles(0x373A, 10, 15, 5018, EffectLayer.Waist);
                     m.SendLocalizedMessage(1115739); // The bard's spellsong fills you with a feeling of invincibility.
 
-                    string args = String.Format("{0}\t{1}\t{2}", m_PropertyBonus, m_DamageMod, m_PropertyBonus2);
+                    string args = String.Format("{0}\t{1}\t{2}", m_PropertyBonus, (int)(m_DamageMod * 100), m_PropertyBonus2);
                     BuffInfo.AddBuff(m, new BuffInfo(BuffIcon.Perseverance, 1115615, 1115732, args.ToString()));
                 }
-
-                list.Clear();
-                list.TrimExcess();
 
 				BeginTimer();
 			}
@@ -80,7 +75,7 @@ namespace Server.Spells.SkillMasteries
         }
 		
 		/// <summary>
-		/// Called in AOS.cs - Defense Chance Bonus
+		/// Defense Chance Bonus
 		/// </summary>
 		/// <returns>Defense Chance Bonus</returns>
 		public override int PropertyBonus()
@@ -89,7 +84,7 @@ namespace Server.Spells.SkillMasteries
 		}
 
         /// <summary>
-        /// Called in AOS.cs - Casting Focus
+        /// Casting Focus
         /// </summary>
         /// <returns>Casting Focus</returns>
 		public override int PropertyBonus2()
@@ -98,10 +93,10 @@ namespace Server.Spells.SkillMasteries
 		}
 		
 		/// <summary>
-		/// Called in AOS.cs, modifies total damage dealt
+		/// modifies total damage dealt
 		/// </summary>
 		/// <param name="damage"></param>
-		public override void AbsorbDamage(ref int damage)
+		public void AbsorbDamage(ref int damage)
 		{
 			damage -= (int)(damage * m_DamageMod);
 		}

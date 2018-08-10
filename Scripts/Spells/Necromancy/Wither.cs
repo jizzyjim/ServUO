@@ -7,6 +7,8 @@ namespace Server.Spells.Necromancy
 {
     public class WitherSpell : NecromancerSpell
     {
+        public override DamageType SpellDamageType { get { return DamageType.SpellAOE; } }
+
         private static readonly SpellInfo m_Info = new SpellInfo(
             "Wither", "Kal Vas An Flam",
             203,
@@ -121,11 +123,27 @@ namespace Server.Spells.Necromancy
                         damage *= 300 + karma + (this.GetDamageSkill(this.Caster) * 10);
                         damage /= 1000;
 
-                        int sdiBonus = AosAttributes.GetValue(this.Caster, AosAttribute.SpellDamage);
-						
-                        // PvP spell damage increase cap of 15% from an item’s magic property in Publish 33(SE)
-                        if (Core.SE && id is PlayerMobile && this.Caster.Player && sdiBonus > 15)
-                            sdiBonus = 15;
+                        int sdiBonus;
+
+                        if (Core.SE)
+                        {
+                            if (Core.SA)
+                            {
+                                sdiBonus = SpellHelper.GetSpellDamageBonus(Caster, m, CastSkill, m is PlayerMobile);
+                            }
+                            else
+                            {
+                                sdiBonus = AosAttributes.GetValue(this.Caster, AosAttribute.SpellDamage);
+
+                                // PvP spell damage increase cap of 15% from an item’s magic property in Publish 33(SE)
+                                if (id is PlayerMobile && this.Caster.Player && sdiBonus > 15)
+                                    sdiBonus = 15;
+                            }
+                        }
+                        else
+                        {
+                            sdiBonus = AosAttributes.GetValue(this.Caster, AosAttribute.SpellDamage);
+                        }
 
                         damage *= (100 + sdiBonus);
                         damage /= 100;

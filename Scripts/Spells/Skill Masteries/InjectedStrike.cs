@@ -21,9 +21,16 @@ namespace Server.Spells.SkillMasteries
         public override SkillName CastSkill { get { return SkillName.Poisoning; } }
 		public override SkillName DamageSkill { get { return SkillName.Anatomy; } }
 
-        public override bool CancelsWeaponAbility { get { return false; } }
+        public override bool ClearOnSpecialAbility { get { return true; } }
+        public override bool CancelsWeaponAbility { get { return true; } }
 
         public override TimeSpan CastDelayBase { get { return TimeSpan.FromSeconds(1.0); } }
+
+        public override void GetCastSkills(out double min, out double max)
+        {
+            min = RequiredSkill;
+            max = RequiredSkill + 10.0;
+        }
 
         public InjectedStrikeSpell(Mobile caster, Item scroll)
             : base(caster, scroll, m_Info)
@@ -32,7 +39,7 @@ namespace Server.Spells.SkillMasteries
 
         public override void SendCastEffect()
         {
-            Caster.FixedEffect(0x36CB, 10, 8, 1277, 2);
+            Caster.FixedParticles(0x3728, 0xA, 0x7, 0x13CB, 0x66C, 3, (EffectLayer)2, 0);
         }
 
         public override void OnCast()
@@ -41,14 +48,13 @@ namespace Server.Spells.SkillMasteries
 
 			if(CheckWeapon())
 			{
-                if (weapon.Poison == null)
+                if (weapon.Poison == null || weapon.PoisonCharges == 0)
                 {
                     var poison = GetLastPotion(Caster);
 
-                    if (poison == null || !Caster.InLOS(poison) || !Caster.InRange(poison.GetWorldLocation(), 2))
-                        Caster.SendLocalizedMessage(502137); // Select the poison you wish to use.
+                    Caster.SendLocalizedMessage(502137); // Select the poison you wish to use.
+                    Caster.Target = new MasteryTarget(this, autoEnd: false);
 
-                    Caster.Target = new MasteryTarget(this, autoEnd: false);//new InternalTarget(this);
                     return;
                 }
                 else if (!HasSpell(Caster, this.GetType()))
@@ -58,12 +64,11 @@ namespace Server.Spells.SkillMasteries
                         BeginTimer();
                         Caster.SendLocalizedMessage(1156138); // You ready your weapon to unleash an injected strike!
 
-                        int bonus = (int)(BaseSkillBonus / 4);
+                        int bonus = 30;
 
-                        BuffInfo.AddBuff(Caster, new BuffInfo(BuffIcon.InjectedStrike, 1155927, 1156163, String.Format("{0}\t{1}", bonus.ToString(), (bonus / 2).ToString())));
                         // Your next successful attack will poison your target and reduce its poison resist by:<br>~1_VAL~% PvM<br>~2_VAL~% PvP
-
-                        Effects.SendLocationParticles(EffectItem.Create(Caster.Location, Caster.Map, EffectItem.DefaultDuration), 0x36CB, 0, 14, 1271, 7, 9915, 0);
+                        BuffInfo.AddBuff(Caster, new BuffInfo(BuffIcon.InjectedStrike, 1155927, 1156163, String.Format("{0}\t{1}", bonus.ToString(), (bonus / 2).ToString())));
+                        Caster.FixedParticles(0x3728, 0x1, 0xA, 0x251E, 0x4F7, 7, (EffectLayer)2, 0);
 
                         weapon.InvalidateProperties();
                     }
@@ -190,7 +195,7 @@ namespace Server.Spells.SkillMasteries
             // Skill Masteries
             int noChargeChance = MasteryInfo.NonPoisonConsumeChance(Caster);
 
-            if (noChargeChance > 0 && noChargeChance < Utility.Random(100))
+            if (noChargeChance == 0 || noChargeChance < Utility.Random(100))
                 --weapon.PoisonCharges;
             else
                 Caster.SendLocalizedMessage(1156095); // Your mastery of poisoning allows you to use your poison charge without consuming it.
@@ -207,7 +212,7 @@ namespace Server.Spells.SkillMasteries
                 p = Poison.GetPoison(maxLevel);
             #endregion
 
-            if ((Caster.Skills[SkillName.Poisoning].Value / 100.0) > Utility.RandomDouble())
+            if ((Caster.Skills[SkillName.Poisoning].Value / 100.0) > Utility.RandomDouble() && p.Level < 3)
             {
                 int level = p.Level + 1;
                 Poison newPoison = Poison.GetPoison(level);
@@ -230,19 +235,23 @@ namespace Server.Spells.SkillMasteries
                 defender.SendLocalizedMessage(1008097, false, Caster.Name); //  : poisoned you!
             }
 
-            int malus = (int)(BaseSkillBonus / 4);
+            int malus = 30;
+
             if (defender is PlayerMobile)
+                malus /= 2;
+
+            if (weapon is BaseRanged)
                 malus /= 2;
 
             ResistanceMod mod = new ResistanceMod(ResistanceType.Poison, -malus);
             defender.AddResistanceMod(mod);
 
-            BuffInfo.AddBuff(defender, new BuffInfo(BuffIcon.InjectedStrikeDebuff, 1155927, BuffInfo.Blank, ""));
+            // ~2_NAME~ reduces your poison resistance by ~1_VAL~.
+            BuffInfo.AddBuff(defender, new BuffInfo(BuffIcon.InjectedStrikeDebuff, 1155927, 1156133, TimeSpan.FromSeconds(7), defender, String.Format("{0}\t{1}", malus, Caster.Name)));
 
-            Server.Timer.DelayCall(TimeSpan.FromSeconds(4), () =>
+            Server.Timer.DelayCall(TimeSpan.FromSeconds(7), () =>
                 {
                     defender.RemoveResistanceMod(mod);
-                    BuffInfo.RemoveBuff(defender, BuffIcon.InjectedStrikeDebuff);
                 });
 
             Expire();

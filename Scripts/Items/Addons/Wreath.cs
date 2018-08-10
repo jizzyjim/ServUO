@@ -61,6 +61,11 @@ namespace Server.Items
             Timer.DelayCall(TimeSpan.Zero, new TimerCallback(FixMovingCrate));
         }
 
+        void IChopable.OnChop(Mobile user)
+        {
+            OnDoubleClick(user);
+        }
+
         public override void OnDoubleClick(Mobile from)
         {
             BaseHouse house = BaseHouse.FindHouseAt(this);
@@ -292,7 +297,7 @@ namespace Server.Items
                 addon.ItemID = itemID;
                 addon.MoveToWorld(loc, from.Map);
 
-                house.Addons.Add(addon);
+                house.Addons[addon] = from;
                 this.Delete();
             }
         }

@@ -1,36 +1,42 @@
 using System;
 using Server.Items;
-using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using Server.Engines.Quests;
 
 namespace Server.Mobiles
 {
     [CorpseName("an ice wyrm corpse")]
     public class IceWyrm : WhiteWyrm
     {
-        private static readonly ArrayList m_Instances = new ArrayList();
-        public static ArrayList Instances { get { return m_Instances; } }
+        public static List<IceWyrm> Instances { get; set; }
         
         [Constructable]
         public IceWyrm()
             : base()
         {
-            m_Instances.Add(this);
-
-            this.Name = "Ice Wyrm";
-            this.Hue = 2729;
-            this.Body = 180;
+            Name = "Ice Wyrm";
+            Hue = 2729;
+            Body = 180;
+			
+			SetResistance(ResistanceType.Cold, 100);
 
             Timer SelfDeleteTimer = new InternalSelfDeleteTimer(this);
             SelfDeleteTimer.Start();
 
             Tamable = false;
+
+            if (Instances == null)
+                Instances = new List<IceWyrm>();
+
+            Instances.Add(this);
         }
 
         public static IceWyrm Spawn(Point3D platLoc, Map platMap)
         {
-            if (m_Instances.Count > 0)
+            if (Instances != null && Instances.Count > 0)
                 return null;
-            
+
             IceWyrm creature = new IceWyrm();
             creature.Home = platLoc;
             creature.RangeHome = 4;
@@ -53,28 +59,39 @@ namespace Server.Mobiles
                 if (Mare.Map != Map.Internal)
                 {
                     Mare.Delete();
-                    this.Stop();
+                    Stop();
                 }
             }
         }
 
-        public override bool OnBeforeDeath()
+        public override void OnDeath(Container c)
         {
-            Mobile killer = DemonKnight.FindRandomPlayer(this);
+            List<DamageStore> rights = GetLootingRights();            
 
-            if (killer != null)
+            foreach (Mobile m in rights.Select(x => x.m_Mobile).Distinct())
             {
-                Item item = new IceWyrmScale();
+                if (m is PlayerMobile)
+                {
+                    PlayerMobile pm = m as PlayerMobile;
 
-                Container pack = killer.Backpack;
+                    if (pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CusteauPerron)
+                    {
+						Item item = new IceWyrmScale();
+						
+                        if (m.Backpack == null || !m.Backpack.TryDropItem(m, item, false))
+                        {
+                            m.BankBox.DropItem(item);
+                        }
 
-                if (pack == null || !pack.TryDropItem(killer, item, false))
-                    killer.BankBox.DropItem(item);
+                        m.SendLocalizedMessage(1154489); // You received a Quest Item!
+                    }
+                }                
+            }
 
-                killer.SendLocalizedMessage(1154489); // You received a Quest Item!
-            }            
+            if (Instances != null && Instances.Contains(this))
+                Instances.Remove(this);
 
-            return base.OnBeforeDeath();
+            base.OnDeath(c);
         }
 
         public override bool ReacquireOnMovement { get { return true; } }
@@ -82,20 +99,20 @@ namespace Server.Mobiles
         public override int Meat { get { return 20; } }
         public override int Hides { get { return 25; } }
         public override HideType HideType { get { return HideType.Barbed; } }
-        public override FoodType FavoriteFood { get { return FoodType.Meat | FoodType.Gold; } }
+        public override FoodType FavoriteFood { get { return FoodType.Meat; } }
         public override bool CanAngerOnTame { get { return true; } }
         public override bool CanRummageCorpses { get { return true; } }
 
         public override void OnAfterDelete()
         {
-            m_Instances.Remove(this);
+            Instances.Remove(this);
 
             base.OnAfterDelete();
         }
 
-        public IceWyrm(Serial serial) : base(serial)
+        public IceWyrm(Serial serial)
+            : base(serial)
         {
-            m_Instances.Add(this);
         }
 
         public override void Serialize(GenericWriter writer)
@@ -109,11 +126,11 @@ namespace Server.Mobiles
             base.Deserialize(reader);
             int version = reader.ReadInt();
 
-            Timer SelfDeleteTimer = new InternalSelfDeleteTimer(this);
-            SelfDeleteTimer.Start();
+            Instances = new List<IceWyrm>();
+            Instances.Add(this);
 
-            if (Tamable)
-                Tamable = false;
+            Timer SelfDeleteTimer = new InternalSelfDeleteTimer(this);
+            SelfDeleteTimer.Start();     
         }
     }
 }

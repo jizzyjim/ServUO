@@ -37,8 +37,6 @@ namespace Server.Spells.Seventh
 
         public void Target(IDamageable m)
         {
-            Mobile mob = m as Mobile;
-
             if (!this.Caster.CanSee(m))
             {
                 this.Caster.SendLocalizedMessage(500237); // Target can not be seen.
@@ -47,38 +45,34 @@ namespace Server.Spells.Seventh
             {
                 SpellHelper.Turn(this.Caster, m);
 
-                if(mob != null)
-                    SpellHelper.CheckReflect((int)this.Circle, this.Caster, ref mob);
+                Mobile source = this.Caster;
+
+                SpellHelper.CheckReflect((int)this.Circle, ref source, ref m);
 
                 double damage = 0;
 
                 if (Core.AOS)
                 {
-                    damage = this.GetNewAosDamage(48, 1, 5, m);
+                    damage = GetNewAosDamage(48, 1, 5, m);
                 }
-                else if (mob != null)
+                else if (m is Mobile)
                 {
                     damage = Utility.Random(27, 22);
 
-                    if (this.CheckResisted(mob))
+                    if (this.CheckResisted((Mobile)m))
                     {
                         damage *= 0.6;
 
-                        mob.SendLocalizedMessage(501783); // You feel yourself resisting magical energy.
+                        ((Mobile)m).SendLocalizedMessage(501783); // You feel yourself resisting magical energy.
                     }
 
-                    damage *= this.GetDamageScalar(mob);
+                    damage *= this.GetDamageScalar((Mobile)m);
                 }
 
-                if (mob != null)
+                if (m != null)
                 {
-                    mob.FixedParticles(0x3709, 10, 30, 5052, EffectLayer.LeftFoot);
-                    mob.PlaySound(0x208);
-                }
-                else
-                {
-                    Effects.SendLocationParticles(m, 0x3709, 10, 30, 5052);
-                    Effects.PlaySound(m.Location, m.Map, 0x208);
+                    m.FixedParticles(0x3709, 10, 30, 5052, EffectLayer.LeftFoot);
+                    m.PlaySound(0x208);
                 }
 
                 if (damage > 0)

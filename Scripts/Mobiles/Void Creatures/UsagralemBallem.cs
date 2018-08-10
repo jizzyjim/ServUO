@@ -49,26 +49,19 @@ namespace Server.Mobiles
             this.VirtualArmor = 64;
 
             this.PackItem(new DaemonBone(30));
+
+            SetWeaponAbility(WeaponAbility.DoubleStrike);
+            SetWeaponAbility(WeaponAbility.WhirlwindAttack);
+            SetWeaponAbility(WeaponAbility.CrushingBlow);
         }
 
         public override void OnDeath(Container c)
         {
             base.OnDeath(c);
 
-            if (Utility.RandomDouble() < 0.3)
-                c.DropItem(new VoidOrb());
-
             if (Utility.RandomDouble() < 0.30)
             {
-                switch (Utility.Random(2))
-                {
-                    case 0:
-                        c.DropItem(new VoidEssence());
-                        break;
-                    case 1:
-                        c.DropItem(new AncientPotteryFragments());
-                        break;
-                }
+                c.DropItem(new AncientPotteryFragments());
             }
         }
 
@@ -110,19 +103,6 @@ namespace Server.Mobiles
             get
             {
                 return Poison.Lethal;
-            }
-        }
-        public override WeaponAbility GetWeaponAbility()
-        {
-            switch ( Utility.Random(3) )
-            {
-                default:
-                case 0:
-                    return WeaponAbility.DoubleStrike;
-                case 1:
-                    return WeaponAbility.WhirlwindAttack;
-                case 2:
-                    return WeaponAbility.CrushingBlow;
             }
         }
 

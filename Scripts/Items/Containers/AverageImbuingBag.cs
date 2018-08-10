@@ -11,32 +11,11 @@ namespace Server.Items
             switch (Utility.Random(2))
             {
                 case 0:
-                    this.AddItem(new SpiderCarapace());
+                    DropItem(new SpiderCarapace());
                     break;
                 case 1:
-                    this.AddItem(new SilverSnakeSkin());
+                    DropItem(new SilverSnakeSkin());
                     break;
-               /* case 0:
-                    this.AddItem(new CrystalShards());
-                    break;
-                case 1:
-                    this.AddItem(new CrushedGlass());
-                    break;
-                case 2:
-                    this.AddItem(new SeedRenewal());
-                    break;
-                case 3:
-                    this.AddItem(new ElvenFletchings());
-                    break;
-                case 4:
-                    this.AddItem(new ArcanicRuneStone());
-                    break;
-                case 5:
-                    this.AddItem(new CrystallineBlackrock());
-                    break;
-                case 6:
-                    this.AddItem(new DelicateScales());
-                    break;*/
             }
         }
 

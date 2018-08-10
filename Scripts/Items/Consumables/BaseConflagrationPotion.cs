@@ -105,7 +105,7 @@ namespace Server.Items
             {
                 for (int j = -2; j <= 2; j ++)
                 {
-                    Point3D p = new Point3D(loc.X + i, loc.Y + j, loc.Z);
+                    Point3D p = new Point3D(loc.X + i, loc.Y + j, map.GetAverageZ(loc.X + i, loc.Y + j));
 
                     if (map.CanFit(p, 12, true, false) && from.InLOS(p))
                         new InternalItem(from, p, map, this.MinDamage, this.MaxDamage);
@@ -351,9 +351,11 @@ namespace Server.Items
                         return;
 					
                     List<Mobile> mobiles = new List<Mobile>();
+                    IPooledEnumerable eable = m_Item.GetMobilesInRange(0);
 
-                    foreach (Mobile mobile in this.m_Item.GetMobilesInRange(0))
+                    foreach (Mobile mobile in eable)
                         mobiles.Add(mobile);
+                    eable.Free();
 
                     for (int i = 0; i < mobiles.Count; i++)
                     {

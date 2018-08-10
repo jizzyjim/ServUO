@@ -7,11 +7,13 @@ using Server.Mobiles;
 using Server.Spells;
 using Server.Targeting;
 
-namespace Server.Spells.Mystic
+namespace Server.Spells.Mysticism
 {
     public class HailStormSpell : MysticSpell
     {
         public override SpellCircle Circle { get { return SpellCircle.Seventh; } }
+        public override bool DelayedDamage { get { return true; } }
+        public override DamageType SpellDamageType { get { return DamageType.SpellAOE; } }
 
         private static SpellInfo m_Info = new SpellInfo(
                 "Hail Storm", "Kal Des Ylem",
@@ -37,21 +39,77 @@ namespace Server.Spells.Mystic
         {
             if (SpellHelper.CheckTown(p, Caster) && CheckSequence())
             {
-                Point3D point = new Point3D(p);
+                SpellHelper.Turn(Caster, p);
+                SpellHelper.GetSurfaceTop(ref p);
 
-                IPooledEnumerable eable = Caster.Map.GetMobilesInRange(point, 2);
+                Map map = Caster.Map;
+
+                if (map == null)
+                    return;
+
+                IPooledEnumerable eable = map.GetObjectsInRange(new Point3D(p), 2);
                 Rectangle2D effectArea = new Rectangle2D(p.X - 3, p.Y - 3, 6, 6);
 
-                List<Mobile> toEffect = new List<Mobile>();
+                List<IDamageable> toEffect = new List<IDamageable>();
 
-                foreach (Mobile m in eable)
+                foreach (object o in eable)
                 {
-                    if (Caster != m && SpellHelper.ValidIndirectTarget(Caster, m) && Caster.CanBeHarmful(m, false))
-                        toEffect.Add(m);
+                    IDamageable id = o as IDamageable;
+
+                    if (id == null || (id is Mobile && (Mobile)id == Caster))
+                        continue;
+
+                    if ((!(id is Mobile) || SpellHelper.ValidIndirectTarget(Caster, id as Mobile)) && Caster.CanBeHarmful(id, false))
+                    {
+                        if (Core.AOS && !Caster.InLOS(id))
+                            continue;
+
+                        toEffect.Add(id);
+                    }
                 }
+
                 eable.Free();
 
-                new HailstormTimer(Caster, this, toEffect, effectArea);
+                Effects.PlaySound(p, map, 0x64F);
+
+                for (int x = effectArea.X; x <= effectArea.X + effectArea.Width; x++)
+                {
+                    for (int y = effectArea.Y; y <= effectArea.Y + effectArea.Height; y++)
+                    {
+                        if (x == effectArea.X && y == effectArea.Y ||
+                            x >= effectArea.X + effectArea.Width - 1 && y >= effectArea.Y + effectArea.Height - 1 ||
+                            y >= effectArea.Y + effectArea.Height - 1 && x == effectArea.X ||
+                            y == effectArea.Y && x >= effectArea.X + effectArea.Width - 1)
+                                continue;
+
+                        IPoint3D pnt = new Point3D(x, y, p.Z);
+                        SpellHelper.GetSurfaceTop(ref pnt);
+
+                        Timer.DelayCall<Point3D>(TimeSpan.FromMilliseconds(Utility.RandomMinMax(100, 300)), point =>
+                            {
+                                Effects.SendLocationEffect(point, map, 0x3779, 12, 11, 0x63, 0);
+                            },
+                            new Point3D(pnt));
+                    }
+                }
+
+                foreach (var id in toEffect)
+                {
+                    if (id.Deleted)
+                        continue;
+
+                    int damage = GetNewAosDamage(51, 1, 5, id is PlayerMobile, id);
+
+                    if (toEffect.Count > 2)
+                        damage = (damage * 2) / toEffect.Count;
+
+                    Caster.DoHarmful(id);
+                    SpellHelper.Damage(this, id, damage, 0, 0, 100, 0, 0);
+
+                    Server.Effects.SendTargetParticles(id, 0x374A, 1, 15, 9502, 97, 3, (EffectLayer)255, 0);
+                }
+
+                ColUtility.Free(toEffect);
             }
 
             FinishSequence();
@@ -61,7 +119,8 @@ namespace Server.Spells.Mystic
         {
             private HailStormSpell m_Owner;
 
-            public InternalTarget(HailStormSpell owner) : base(10, true, TargetFlags.None)
+            public InternalTarget(HailStormSpell owner)
+                : base(10, true, TargetFlags.None)
             {
                 m_Owner = owner;
             }
@@ -75,80 +134,6 @@ namespace Server.Spells.Mystic
             protected override void OnTargetFinish(Mobile from)
             {
                 m_Owner.FinishSequence();
-            }
-        }
-
-        private class HailstormTimer : Timer
-        {
-            private List<Mobile> m_ToEffect;
-            private Rectangle2D m_EffectArea;
-            private Mobile m_Caster;
-            private Map m_Map;
-            private int m_Ticks;
-            private Spell m_Spell;
-
-            public HailstormTimer(Mobile caster, Spell spell, List<Mobile> toEffect, Rectangle2D area)
-                : base(TimeSpan.FromMilliseconds(100.0), TimeSpan.FromMilliseconds(100.0))
-            {
-                m_ToEffect = toEffect;
-                m_EffectArea = area;
-                m_Caster = caster;
-                m_Map = caster.Map;
-                m_Spell = spell;
-                Start();
-            }
-
-            protected override void OnTick()
-            {
-                m_Ticks++;
-
-                if (m_Spell == null)
-                {
-                    Stop();
-                    return;
-                }
-
-                if (m_Ticks >= 20)
-                {
-                    int damage = 0;
-
-                    foreach (Mobile m in m_ToEffect)
-                    {
-                        if (m.Deleted || !m.Alive)
-                            continue;
-
-                        damage = m_Spell.GetNewAosDamage(51, 1, 5, m is PlayerMobile, m);
-
-                        if (m_ToEffect.Count > 2)
-                            damage = (damage * 2) / m_ToEffect.Count;
-
-                        m_Caster.DoHarmful(m);
-                        SpellHelper.Damage(m_Spell, m, damage, 0, 0, 100, 0, 0);
-
-                        m.FixedParticles(0x374A, 1, 15, 9502, 97, 3, (EffectLayer)255);
-                    }
-
-                    Stop();
-                }
-
-                int x = m_EffectArea.X + Utility.Random(m_EffectArea.Width);
-                int y = m_EffectArea.Y + Utility.Random(m_EffectArea.Height);
-                int z = m_Map.GetAverageZ(x, y);
-
-                int fromX = x + Utility.RandomMinMax(-8, 8);
-                int fromY = y - 10;
-                int fromZ = z + 30;
-
-                Point3D start = new Point3D(fromX, fromY, fromZ);
-                Point3D finish = new Point3D(x, y, z);
-
-                Effects.SendMovingParticles(
-                    new Entity(Serial.Zero, start, m_Map),
-                    new Entity(Serial.Zero, finish, m_Map),
-                    0x36D4, 15, 0, false, false, 1365, 0, 9502, 1, 0, (EffectLayer)255, 0x100);
-
-                Effects.SendLocationEffect(finish, m_Map, 0x3728, 10, 20, 1365, 0);
-                Effects.PlaySound(finish, m_Map, 0x64F);
             }
         }
     }

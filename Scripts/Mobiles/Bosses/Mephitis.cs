@@ -1,6 +1,7 @@
 using System;
 using Server.Engines.CannedEvil;
 using Server.Items;
+using System.Collections.Generic;
 
 namespace Server.Mobiles
 {
@@ -10,37 +11,39 @@ namespace Server.Mobiles
         public Mephitis()
             : base(AIType.AI_Melee)
         {
-            this.Body = 173;
-            this.Name = "Mephitis";
+            Body = 173;
+            Name = "Mephitis";
 
-            this.BaseSoundID = 0x183;
+            BaseSoundID = 0x183;
 
-            this.SetStr(505, 1000);
-            this.SetDex(102, 300);
-            this.SetInt(402, 600);
+            SetStr(505, 1000);
+            SetDex(102, 300);
+            SetInt(402, 600);
 
-            this.SetHits(3000);
-            this.SetStam(105, 600);
+            SetHits(12000);
+            SetStam(105, 600);
 
-            this.SetDamage(21, 33);
+            SetDamage(21, 33);
 
-            this.SetDamageType(ResistanceType.Physical, 50);
-            this.SetDamageType(ResistanceType.Poison, 50);
+            SetDamageType(ResistanceType.Physical, 50);
+            SetDamageType(ResistanceType.Poison, 50);
 
-            this.SetResistance(ResistanceType.Physical, 75, 80);
-            this.SetResistance(ResistanceType.Fire, 60, 70);
-            this.SetResistance(ResistanceType.Cold, 60, 70);
-            this.SetResistance(ResistanceType.Poison, 100);
-            this.SetResistance(ResistanceType.Energy, 60, 70);
+            SetResistance(ResistanceType.Physical, 75, 80);
+            SetResistance(ResistanceType.Fire, 60, 70);
+            SetResistance(ResistanceType.Cold, 60, 70);
+            SetResistance(ResistanceType.Poison, 100);
+            SetResistance(ResistanceType.Energy, 60, 70);
 
-            this.SetSkill(SkillName.MagicResist, 70.7, 140.0);
-            this.SetSkill(SkillName.Tactics, 97.6, 100.0);
-            this.SetSkill(SkillName.Wrestling, 97.6, 100.0);
+            SetSkill(SkillName.MagicResist, 70.7, 140.0);
+            SetSkill(SkillName.Tactics, 97.6, 100.0);
+            SetSkill(SkillName.Wrestling, 97.6, 100.0);
 
-            this.Fame = 22500;
-            this.Karma = -22500;
+            Fame = 22500;
+            Karma = -22500;
 
-            this.VirtualArmor = 80;
+            VirtualArmor = 80;
+
+            SetSpecialAbility(SpecialAbility.Webbing);
         }
 
         public Mephitis(Serial serial)
@@ -99,26 +102,18 @@ namespace Server.Mobiles
         }
         public override void GenerateLoot()
         {
-            this.AddLoot(LootPack.UltraRich, 4);
-        }
-
-        public override void OnGotMeleeAttack(Mobile attacker)
-        {
-            base.OnGotMeleeAttack(attacker);
-            // TODO: Web ability
+            AddLoot(LootPack.UltraRich, 4);
         }
 
         public override void Serialize(GenericWriter writer)
         {
             base.Serialize(writer);
-
             writer.Write((int)0); // version
         }
 
         public override void Deserialize(GenericReader reader)
         {
             base.Deserialize(reader);
-
             int version = reader.ReadInt();
         }
     }

@@ -29,11 +29,11 @@ namespace Server.Multis.Deeds
 
                 if (from.AccessLevel >= AccessLevel.GameMaster || reg.AllowHousing(from, p))
                     this.m_Deed.OnPlacement(from, p);
-                else if (reg.IsPartOf(typeof(TempNoHousingRegion)))
+                else if (reg.IsPartOf<TempNoHousingRegion>())
                     from.SendLocalizedMessage(501270); // Lord British has decreed a 'no build' period, thus you cannot build this house at this time.
-                else if (reg.IsPartOf(typeof(TreasureRegion)) || reg.IsPartOf(typeof(HouseRegion)))
+                else if (reg.IsPartOf<TreasureRegion>() || reg.IsPartOf<HouseRegion>())
                     from.SendLocalizedMessage(1043287); // The house could not be created here.  Either something is blocking the house, or the house would not be on valid terrain.
-                else if (reg.IsPartOf(typeof(HouseRaffleRegion)))
+                else if (reg.IsPartOf<HouseRaffleRegion>())
                     from.SendLocalizedMessage(1150493); // You must have a deed for this plot of land in order to build here.
                 else
                     from.SendLocalizedMessage(501265); // Housing can not be created in this area.
@@ -128,10 +128,6 @@ namespace Server.Multis.Deeds
             {
                 from.SendLocalizedMessage(1042001); // That must be in your pack for you to use it.
             }
-            else if (from.AccessLevel < AccessLevel.GameMaster && BaseHouse.HasAccountHouse(from))
-            {
-                from.SendLocalizedMessage(501271); // You already own a house, you may not place another!
-            }
             else
             {
                 from.SendLocalizedMessage(1010433); /* House placement cancellation could result in a
@@ -153,10 +149,6 @@ namespace Server.Multis.Deeds
             {
                 from.SendLocalizedMessage(1042001); // That must be in your pack for you to use it.
             }
-            else if (from.AccessLevel < AccessLevel.GameMaster && BaseHouse.HasAccountHouse(from))
-            {
-                from.SendLocalizedMessage(501271); // You already own a house, you may not place another!
-            }
             else
             {
                 ArrayList toMove;
@@ -167,20 +159,22 @@ namespace Server.Multis.Deeds
                 {
                     case HousePlacementResult.Valid:
                         {
-                            BaseHouse house = this.GetHouse(from);
-                            house.MoveToWorld(center, from.Map);
-                            this.Delete();
-
-                            for (int i = 0; i < toMove.Count; ++i)
+                            if (from.AccessLevel > AccessLevel.Player || BaseHouse.CheckAccountHouseLimit(from))
                             {
-                                object o = toMove[i];
+                                BaseHouse house = this.GetHouse(from);
+                                house.MoveToWorld(center, from.Map);
+                                this.Delete();
 
-                                if (o is Mobile)
-                                    ((Mobile)o).Location = house.BanLocation;
-                                else if (o is Item)
-                                    ((Item)o).Location = house.BanLocation;
+                                for (int i = 0; i < toMove.Count; ++i)
+                                {
+                                    object o = toMove[i];
+
+                                    if (o is Mobile)
+                                        ((Mobile)o).Location = house.BanLocation;
+                                    else if (o is Item)
+                                        ((Item)o).Location = house.BanLocation;
+                                }
                             }
-
                             break;
                         }
                     case HousePlacementResult.BadItem:

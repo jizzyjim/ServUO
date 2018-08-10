@@ -63,6 +63,7 @@ namespace Server.Items
             }
         }
 
+        [Constructable]
         public DragonBardingDeed()
             : base(0x14F0)
         {
@@ -122,10 +123,10 @@ namespace Server.Items
             {
                 pet.BardingExceptional = this.Exceptional;
                 pet.BardingCrafter = this.Crafter;
-                pet.BardingHP = pet.BardingMaxHP;
                 pet.BardingResource = this.Resource;
                 pet.HasBarding = true;
                 pet.Hue = this.Hue;
+                pet.BardingHP = pet.BardingMaxHP;
 
                 this.Delete();
 
@@ -174,7 +175,7 @@ namespace Server.Items
 
         #region ICraftable Members
 
-        public int OnCraft(int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, BaseTool tool, CraftItem craftItem, int resHue)
+        public int OnCraft(int quality, bool makersMark, Mobile from, CraftSystem craftSystem, Type typeRes, ITool tool, CraftItem craftItem, int resHue)
         {
             this.Exceptional = (quality >= 2);
 
@@ -187,12 +188,6 @@ namespace Server.Items
                 resourceType = craftItem.Resources.GetAt(0).ItemType;
 
             this.Resource = CraftResources.GetFromType(resourceType);
-
-            CraftContext context = craftSystem.GetContext(from);
-
-            if (context != null && context.DoNotColor)
-                this.Hue = 0;
-
             return quality;
         }
         #endregion

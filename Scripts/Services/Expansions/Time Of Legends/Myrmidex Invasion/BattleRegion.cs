@@ -8,7 +8,7 @@ using System.Xml;
 
 namespace Server.Engines.MyrmidexInvasion
 {
-    public class BattleRegion : StygianAbyssRegion
+    public class BattleRegion : DungeonRegion
 	{
         public BattleSpawner Spawner { get; set; }
 
@@ -21,10 +21,26 @@ namespace Server.Engines.MyrmidexInvasion
         {
             base.OnDeath(m);
 
-            if (BattleSpawner.Active && m is BaseCreature && ((BaseCreature)m).GetMaster() == null && Spawner != null)
+            bool nomaster = m is BaseCreature && ((BaseCreature)m).GetMaster() == null;
+
+            if (BattleSpawner.Instance != null && BattleSpawner.Instance.Active && nomaster && Spawner != null)
             {
                 Timer.DelayCall<BaseCreature>(TimeSpan.FromSeconds(.25), Spawner.RegisterDeath, (BaseCreature)m);
             }
+
+            // the delay ensures the corpse is created after death
+            Timer.DelayCall(() =>
+                {
+                    if (m.Corpse != null && (m is BritannianInfantry || m is TribeWarrior || m is TribeShaman || m is TribeChieftan || m is MyrmidexDrone || m is MyrmidexWarrior))
+                    {
+                        Mobile killer = m.LastKiller;
+
+                        if (killer == null || (killer is BaseCreature && !(((BaseCreature)killer).GetMaster() is PlayerMobile)))
+                        {
+                            m.Corpse.Delete();
+                        }
+                    }
+                });
         }
 
         public override void OnExit(Mobile m)
@@ -39,7 +55,7 @@ namespace Server.Engines.MyrmidexInvasion
         {
             Mobile attacker = m.FindMostRecentDamager(false);
 
-            if (MyrmidexInvasionSystem.IsEnemies(m, attacker) && EodonianPotion.IsUnderEffects(attacker, PotionEffect.Kurak))
+            if (MyrmidexInvasionSystem.AreEnemies(m, attacker) && EodonianPotion.IsUnderEffects(attacker, PotionEffect.Kurak))
             {
                 Damage *= 3;
 

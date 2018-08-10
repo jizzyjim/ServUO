@@ -33,6 +33,9 @@ namespace Server.Engines.CityLoyalty
         public string CustomTitle { get; set; }
 
         [CommandProperty(AccessLevel.GameMaster)]
+        public bool ShowGainMessage { get; set; }
+
+        [CommandProperty(AccessLevel.GameMaster)]
         public LoyaltyRating LoyaltyRating
         {
             get
@@ -80,6 +83,7 @@ namespace Server.Engines.CityLoyalty
 		public CityLoyaltyEntry(PlayerMobile pm, City city) : base(pm)
 		{
             City = city;
+            ShowGainMessage = true;
 		}
 		
 		public void DeclareCitizenship()
@@ -92,10 +96,11 @@ namespace Server.Engines.CityLoyalty
 		{
             foreach (int i in Enum.GetValues(typeof(CityTitle)))
             {
-                Player.RemoveCollectionTitle(CityLoyaltySystem.GetTitleLocalization(Player, (CityTitle)i, City), true);
+                Player.RemoveRewardTitle(CityLoyaltySystem.GetTitleLocalization(Player, (CityTitle)i, City), true);
             }
 
-            Player.RemoveCollectionTitle(1154017, true);
+            CustomTitle = null;
+            Player.RemoveRewardTitle(1154017, true);
 
 			IsCitizen = false;
             Titles = CityTitle.None;
@@ -106,7 +111,7 @@ namespace Server.Engines.CityLoyalty
             if ((Titles & title) == 0)
             {
                 int loc = CityLoyaltySystem.GetTitleLocalization(Player, title, City);
-                Player.AddCollectionTitle(loc);
+                Player.AddRewardTitle(loc);
 
                 Titles |= title;
                 Player.SendLocalizedMessage(1073625, String.Format("#{0}", loc.ToString())); // The title "~1_TITLE~" has been bestowed upon you.
@@ -121,11 +126,14 @@ namespace Server.Engines.CityLoyalty
 		public override void Serialize(GenericWriter writer)
 		{
 			base.Serialize(writer);
-			writer.Write(0);
-			
+			writer.Write(1);
+
+            writer.Write(ShowGainMessage);
+
 			writer.Write(Love);
 			writer.Write(Hate);
 			writer.Write(Neutrality);
+
 			writer.Write((int)Titles);
             writer.Write(TradeDealExpires);
             writer.Write(_Utilizing);
@@ -138,18 +146,33 @@ namespace Server.Engines.CityLoyalty
 		{
 			base.Deserialize(reader);
 			int version = reader.ReadInt();
-			
-			Love = reader.ReadInt();
-			Hate = reader.ReadInt();
-			Neutrality = reader.ReadInt();
 
-			Titles = (CityTitle)reader.ReadInt();
-            TradeDealExpires = reader.ReadDateTime();
-            _Utilizing = reader.ReadBool();
-            CustomTitle = reader.ReadString();
-
-            CheckTradeDeal();
-			IsCitizen = reader.ReadBool();
+            switch (version)
+            {
+                case 1:
+                    ShowGainMessage = reader.ReadBool();
+                    goto case 0;
+                case 0:
+					{
+		                if (version == 0)
+		                {
+		                    ShowGainMessage = true;
+		                }
+		
+		                Love = reader.ReadInt();
+		                Hate = reader.ReadInt();
+		                Neutrality = reader.ReadInt();
+		
+		                Titles = (CityTitle)reader.ReadInt();
+		                TradeDealExpires = reader.ReadDateTime();
+		                _Utilizing = reader.ReadBool();
+		                CustomTitle = reader.ReadString();
+		
+		                CheckTradeDeal();
+		                IsCitizen = reader.ReadBool();
+					}
+                    break;
+            }
 		}
 	}
 }

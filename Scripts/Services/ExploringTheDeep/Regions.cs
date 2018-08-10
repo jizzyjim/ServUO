@@ -23,34 +23,34 @@ namespace Server.Regions
 
         public override void OnEnter(Mobile m)
         {
-            if (!(m is PlayerMobile) || !(m.IsPlayer()))
-                return;
+            if ((m is PlayerMobile) && m.Alive)
+            {
+                PlayerMobile pm = m as PlayerMobile;
 
-            PlayerMobile pm = m as PlayerMobile;            
+                if (m.Region.Name == "Ice Wyrm" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CusteauPerron)
+                {
+                    creature = IceWyrm.Spawn(new Point3D(5805 + Utility.RandomMinMax(-5, 5), 240 + Utility.RandomMinMax(-5, 5), 0), Map.Trammel);
+                }
+                else if (m.Region.Name == "Mercutio The Unsavory" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
+                {
+                    creature = MercutioTheUnsavory.Spawn(new Point3D(2582 + Utility.RandomMinMax(-5, 5), 1118 + Utility.RandomMinMax(-5, 5), 0), Map.Trammel);
+                }
+                else if (m.Region.Name == "Djinn" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
+                {
+                    creature = Djinn.Spawn(new Point3D(1732 + Utility.RandomMinMax(-5, 5), 520 + Utility.RandomMinMax(-5, 5), 8), Map.Ilshenar);
+                }
+                else if (m.Region.Name == "Obsidian Wyvern" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
+                {
+                    creature = ObsidianWyvern.Spawn(new Point3D(5136 + Utility.RandomMinMax(-5, 5), 966 + Utility.RandomMinMax(-5, 5), 0), Map.Trammel);
+                }
+                else if (m.Region.Name == "Orc Engineer" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
+                {
+                    creature = OrcEngineer.Spawn(new Point3D(5311 + Utility.RandomMinMax(-5, 5), 1968 + Utility.RandomMinMax(-5, 5), 0), Map.Trammel);
+                }
 
-            if (m.Region.Name == "Ice Wyrm" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CusteauPerron)
-            {
-                creature = IceWyrm.Spawn(new Point3D(5805 + Utility.RandomMinMax(-5, 5), 240 + Utility.RandomMinMax(-5, 5), 0), Map.Trammel);
+                if (creature == null)
+                    return;
             }
-            else if (m.Region.Name == "Mercutio The Unsavory" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
-            {
-                creature = MercutioTheUnsavory.Spawn(new Point3D(2582 + Utility.RandomMinMax(-5, 5), 1118 + Utility.RandomMinMax(-5, 5), 0), Map.Trammel);
-            }
-            else if (m.Region.Name == "Djinn" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
-            {
-                creature = Djinn.Spawn(new Point3D(1732 + Utility.RandomMinMax(-5, 5), 520 + Utility.RandomMinMax(-5, 5), 0), Map.Ilshenar);
-            }
-            else if (m.Region.Name == "Obsidian Wyvern" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
-            {
-                creature = ObsidianWyvern.Spawn(new Point3D(5136 + Utility.RandomMinMax(-5, 5), 966 + Utility.RandomMinMax(-5, 5), 0), Map.Trammel);
-            }
-            else if (m.Region.Name == "Orc Engineer" && pm.ExploringTheDeepQuest == ExploringTheDeepQuestChain.CollectTheComponent)
-            {
-                creature = OrcEngineer.Spawn(new Point3D(5311 + Utility.RandomMinMax(-5, 5), 1968 + Utility.RandomMinMax(-5, 5), 0), Map.Trammel);                
-            }
-
-            if (creature == null)
-                return;
         }
     }
 
@@ -75,7 +75,6 @@ namespace Server.Regions
         }
     }
 
-
     public class NoTravelSpellsAllowed : BaseRegion
     {
         public NoTravelSpellsAllowed(XmlElement xml, Map map, Region parent)
@@ -88,17 +87,9 @@ namespace Server.Regions
             return false;
         }
 
-        public override bool OnBeginSpellCast(Mobile from, ISpell s)
+        public override bool CheckTravel(Mobile m, Point3D newLocation, Server.Spells.TravelCheckType travelType)
         {
-            if ((s is TeleportSpell || s is GateTravelSpell || s is RecallSpell || s is MarkSpell || s is SacredJourneySpell) && from.IsPlayer())
-            {
-                from.SendLocalizedMessage(500015); // You do not have that spell!
-                return false;
-            }
-            else
-            {
-                return base.OnBeginSpellCast(from, s);
-            }
+            return false;
         }
     }
 
@@ -116,11 +107,8 @@ namespace Server.Regions
 
             if (m is PlayerMobile)
             {
-                Item robe = m.FindItemOnLayer(Layer.OuterTorso);
-                Item boot = m.FindItemOnLayer(Layer.Shoes);
-                Item lens = m.FindItemOnLayer(Layer.Helm);
-                Item neck = m.FindItemOnLayer(Layer.Neck);
-
+                int equipment = m.Items.Where(i => (i is CanvassRobe || i is BootsOfBallast || i is NictitatingLens || i is AquaPendant || i is GargishNictitatingLens) && (i.Parent is Mobile && ((Mobile)i.Parent).FindItemOnLayer(i.Layer) == i)).Count();
+                
                 PlayerMobile pm = m as PlayerMobile;
 
                 if (m.AccessLevel == AccessLevel.Player)
@@ -138,9 +126,14 @@ namespace Server.Regions
                             return false;
                         }
                     }
-                    else if (m.Alive && !(robe is CanvassRobe) || !(lens is NictitatingLens) || !(boot is BootsOfBallast) || !(neck is AquaPendant))
+                    else if (pm.ExploringTheDeepQuest != ExploringTheDeepQuestChain.CollectTheComponentComplete)
                     {
                         m.SendLocalizedMessage(1154325); // You feel as though by doing this you are missing out on an important part of your journey...
+                        return false;
+                    }
+                    else if (equipment < 4)
+                    {
+                        m.SendLocalizedMessage(1154413); // You couldn't hope to survive proceeding without the proper equipment...
                         return false;
                     }
                 }
@@ -169,19 +162,6 @@ namespace Server.Regions
         public override bool CheckTravel(Mobile m, Point3D newLocation, Server.Spells.TravelCheckType travelType)
         {
             return false;
-        }
-
-        public override bool OnBeginSpellCast(Mobile from, ISpell s)
-        {
-            if ((s is GateTravelSpell || s is RecallSpell || s is MarkSpell || s is SacredJourneySpell) && from.IsPlayer())
-            {
-                from.SendLocalizedMessage(500015); // You do not have that spell!
-                return false;
-            }
-            else
-            {
-                return base.OnBeginSpellCast(from, s);
-            }
         }
     }
 }

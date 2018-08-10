@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+
 using Server.Accounting;
 using Server.ContextMenus;
 using Server.Guilds;
@@ -19,6 +21,8 @@ namespace Server.Multis
     public abstract class BaseHouse : BaseMulti
     {
 		private static int m_AccountHouseLimit = Config.Get("Housing.AccountHouseLimit", 1);
+
+        public static int AccountHouseLimit { get { return m_AccountHouseLimit; } }
 
         public static bool NewVendorSystem
         {
@@ -53,28 +57,28 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_NextDecayStage;
+                return m_NextDecayStage;
             }
             set
             {
-                this.m_NextDecayStage = value;
+                m_NextDecayStage = value;
             }
         }
 
         public void ResetDynamicDecay()
         {
-            this.m_CurrentStage = DecayLevel.Ageless;
-            this.m_NextDecayStage = DateTime.MinValue;
+            m_CurrentStage = DecayLevel.Ageless;
+            m_NextDecayStage = DateTime.MinValue;
         }
 
         public void SetDynamicDecay(DecayLevel level)
         {
-            this.m_CurrentStage = level;
+            m_CurrentStage = level;
 
             if (DynamicDecay.Decays(level))
-                this.m_NextDecayStage = DateTime.UtcNow + DynamicDecay.GetRandomDuration(level);
+                m_NextDecayStage = DateTime.UtcNow + DynamicDecay.GetRandomDuration(level);
             else
-                this.m_NextDecayStage = DateTime.MinValue;
+                m_NextDecayStage = DateTime.MinValue;
         }
 
         #endregion
@@ -95,11 +99,11 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_LastRefreshed;
+                return m_LastRefreshed;
             }
             set
             {
-                this.m_LastRefreshed = value;
+                m_LastRefreshed = value;
             }
         }
 
@@ -108,11 +112,11 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_RestrictDecay;
+                return m_RestrictDecay;
             }
             set
             {
-                this.m_RestrictDecay = value;
+                m_RestrictDecay = value;
             }
         }
 
@@ -128,13 +132,13 @@ namespace Server.Multis
         {
             get
             {
-                if (this.m_RestrictDecay || !DecayEnabled || this.DecayPeriod == TimeSpan.Zero)
+                if (m_RestrictDecay || !DecayEnabled || DecayPeriod == TimeSpan.Zero)
                     return DecayType.Ageless;
 
-                if (this.m_Owner == null)
+                if (m_Owner == null)
                     return Core.AOS ? DecayType.Condemned : DecayType.ManualRefresh;
 
-                Account acct = this.m_Owner.Account as Account;
+                Account acct = m_Owner.Account as Account;
 
                 if (acct == null)
                     return Core.AOS ? DecayType.Condemned : DecayType.ManualRefresh;
@@ -156,15 +160,7 @@ namespace Server.Multis
                 if (acct.Inactive)
                     return DecayType.Condemned;
 
-                List<BaseHouse> allHouses = new List<BaseHouse>();
-
-                for (int i = 0; i < acct.Length; ++i)
-                {
-                    Mobile mob = acct[i];
-
-                    if (mob != null)
-                        allHouses.AddRange(GetHouses(mob));
-                }
+                List<BaseHouse> allHouses = GetHouses(m_Owner);
 
                 BaseHouse newest = null;
 
@@ -172,9 +168,11 @@ namespace Server.Multis
                 {
                     BaseHouse check = allHouses[i];
 
-                    if (newest == null || this.IsNewer(check, newest))
+                    if (newest == null || IsNewer(check, newest))
                         newest = check;
                 }
+
+                ColUtility.Free(allHouses);
 
                 if (this == newest)
                     return DecayType.AutoRefresh;
@@ -195,7 +193,7 @@ namespace Server.Multis
         {
             get
             {
-                DecayType type = this.DecayType;
+                DecayType type = DecayType;
 
                 return (type == DecayType.Condemned || type == DecayType.ManualRefresh);
             }
@@ -210,37 +208,37 @@ namespace Server.Multis
             {
                 DecayLevel result;
 
-                if (!this.CanDecay)
+                if (!CanDecay)
                 {
                     if (DynamicDecay.Enabled)
-                        this.ResetDynamicDecay();
+                        ResetDynamicDecay();
 
-                    this.m_LastRefreshed = DateTime.UtcNow;
+                    m_LastRefreshed = DateTime.UtcNow;
                     result = DecayLevel.Ageless;
                 }
                 else if (DynamicDecay.Enabled)
                 {
-                    DecayLevel stage = this.m_CurrentStage;
+                    DecayLevel stage = m_CurrentStage;
 
-                    if (stage == DecayLevel.Ageless || (DynamicDecay.Decays(stage) && this.m_NextDecayStage <= DateTime.UtcNow))
-                        this.SetDynamicDecay(++stage);
+                    if (stage == DecayLevel.Ageless || (DynamicDecay.Decays(stage) && m_NextDecayStage <= DateTime.UtcNow))
+                        SetDynamicDecay(++stage);
 
-                    if (stage == DecayLevel.Collapsed && (this.HasRentedVendors || this.VendorInventories.Count > 0))
+                    if (stage == DecayLevel.Collapsed && (HasRentedVendors || VendorInventories.Count > 0))
                         result = DecayLevel.DemolitionPending;
                     else
                         result = stage;
                 }
                 else
                 {
-                    result = this.GetOldDecayLevel();
+                    result = GetOldDecayLevel();
                 }
 
-                if (result != this.m_LastDecayLevel)
+                if (result != m_LastDecayLevel)
                 {
-                    this.m_LastDecayLevel = result;
+                    m_LastDecayLevel = result;
 
-                    if (this.m_Sign != null && !this.m_Sign.GettingProperties)
-                        this.m_Sign.InvalidateProperties();
+                    if (m_Sign != null && !m_Sign.GettingProperties)
+                        m_Sign.InvalidateProperties();
                 }
 
                 return result;
@@ -249,11 +247,11 @@ namespace Server.Multis
 
         public DecayLevel GetOldDecayLevel()
         {
-            TimeSpan timeAfterRefresh = DateTime.UtcNow - this.m_LastRefreshed;
-            int percent = (int)((timeAfterRefresh.Ticks * 1000) / this.DecayPeriod.Ticks);
+            TimeSpan timeAfterRefresh = DateTime.UtcNow - m_LastRefreshed;
+            int percent = (int)((timeAfterRefresh.Ticks * 1000) / DecayPeriod.Ticks);
 
             if (percent >= 1000) // 100.0%
-                return (this.HasRentedVendors || this.VendorInventories.Count > 0) ? DecayLevel.DemolitionPending : DecayLevel.Collapsed;
+                return (HasRentedVendors || VendorInventories.Count > 0) ? DecayLevel.DemolitionPending : DecayLevel.Collapsed;
             else if (percent >= 950) // 95.0% - 99.9%
                 return DecayLevel.IDOC;
             else if (percent >= 750) // 75.0% - 94.9%
@@ -270,25 +268,25 @@ namespace Server.Multis
 
         public virtual bool RefreshDecay()
         {
-            if (this.DecayType == DecayType.Condemned)
+            if (DecayType == DecayType.Condemned)
                 return false;
 
-            DecayLevel oldLevel = this.DecayLevel;
+            DecayLevel oldLevel = DecayLevel;
 
-            this.m_LastRefreshed = DateTime.UtcNow;
+            m_LastRefreshed = DateTime.UtcNow;
 
             if (DynamicDecay.Enabled)
-                this.ResetDynamicDecay();
+                ResetDynamicDecay();
 
-            if (this.m_Sign != null)
-                this.m_Sign.InvalidateProperties();
+            if (m_Sign != null)
+                m_Sign.InvalidateProperties();
 
             return (oldLevel > DecayLevel.LikeNew);
         }
 
         public virtual bool CheckDecay()
         {
-            if (!this.Deleted && this.DecayLevel == DecayLevel.Collapsed)
+            if (!Deleted && DecayLevel == DecayLevel.Collapsed)
             {
                 Timer.DelayCall(TimeSpan.Zero, new TimerCallback(Decay_Sandbox));
                 return true;
@@ -299,12 +297,12 @@ namespace Server.Multis
 
         public virtual void KillVendors()
         {
-            ArrayList list = new ArrayList(this.PlayerVendors);
+            List<Mobile> list = new List<Mobile>(PlayerVendors);
 
             foreach (PlayerVendor vendor in list)
                 vendor.Destroy(true);
 
-            list = new ArrayList(this.PlayerBarkeepers);
+            list = new List<Mobile>(PlayerBarkeepers);
 
             foreach (PlayerBarkeeper barkeeper in list)
                 barkeeper.Delete();
@@ -312,14 +310,63 @@ namespace Server.Multis
 
         public virtual void Decay_Sandbox()
         {
-            if (this.Deleted)
+            if (Deleted)
                 return;
 
             if (Core.ML)
                 new TempNoHousingRegion(this, null);
 
-            this.KillVendors();
-            this.Delete();
+            if (Core.SA)
+            {
+                Rectangle3D[] recs = m_Region.Area;
+                Map map = Map;
+
+                Timer.DelayCall(TimeSpan.FromMilliseconds(250), () => OnAfterDecay(recs, map));
+            }
+
+            KillVendors();
+            Delete();
+        }
+
+        public virtual void OnAfterDecay(Rectangle3D[] recs, Map map)
+        {
+            if (map != null && recs.Length > 0)
+            {
+                int count = Utility.RandomMinMax(1, 4);
+
+                for (int i = 0; i < count; i++)
+                {
+                    var rec3D = recs[Utility.Random(recs.Length)];
+                    var rec2D = new Rectangle2D(rec3D.Start, rec3D.End);
+
+                    var eable = map.GetItemsInBounds(rec2D);
+                    var list = new List<Item>();
+
+                    foreach (Item item in eable)
+                    {
+                        if (item.RootParent == null && item.Movable && item.LootType != LootType.Blessed)
+                        {
+                            list.Add(item);
+                        }
+                    }
+
+                    if (list.Count > 0)
+                    {
+                        Item item = list[Utility.Random(list.Count)];
+
+                        if (item != null)
+                        {
+                            var grubber = new Grubber();
+                            grubber.MoveToWorld(item.Location, item.Map);
+
+                            grubber.PackItem(item);
+                        }
+                    }
+
+                    eable.Free();
+                    ColUtility.Free(list);
+                }
+            }
         }
 
         public virtual TimeSpan RestrictedPlacingTime
@@ -335,7 +382,7 @@ namespace Server.Multis
         {
             get
             {
-                return (Core.ML ? 1.2 : 1.0);
+                return (Core.ML ? Core.SA ? 1.4 : 1.2 : 1.0);
             }
         }
 
@@ -344,35 +391,36 @@ namespace Server.Multis
         private HouseRegion m_Region;
         private HouseSign m_Sign;
         private TrashBarrel m_Trash;
-        private ArrayList m_Doors;
+        private List<Item> m_Doors;
 
         private Mobile m_Owner;
 
-        private ArrayList m_Access;
-        private ArrayList m_Bans;
-        private ArrayList m_CoOwners;
-        private ArrayList m_Friends;
+        private List<Mobile> m_Access;
+        private List<Mobile> m_Bans;
+        private List<Mobile> m_CoOwners;
+        private List<Mobile> m_Friends;
 
-        private readonly ArrayList m_PlayerVendors = new ArrayList();
-        private readonly ArrayList m_PlayerBarkeepers = new ArrayList();
+        private readonly List<Mobile> m_PlayerVendors = new List<Mobile>();
+        private readonly List<Mobile> m_PlayerBarkeepers = new List<Mobile>();
 
         private Dictionary<Item, Mobile> m_LockDowns;
-        private ArrayList m_VendorRentalContracts;
-        private ArrayList m_Secures;
+        private List<Item> m_VendorRentalContracts;
+        private List<SecureInfo> m_Secures;
 
-        private ArrayList m_Addons;
+        private Dictionary<Item, Mobile> m_Addons;
+        private List<Item> m_Carpets;
 
-        private readonly ArrayList m_VendorInventories = new ArrayList();
-        private readonly ArrayList m_RelocatedEntities = new ArrayList();
+        private readonly List<VendorInventory> m_VendorInventories = new List<VendorInventory>();
+        private readonly List<RelocatedEntity> m_RelocatedEntities = new List<RelocatedEntity>();
 
         private MovingCrate m_MovingCrate;
-        private ArrayList m_InternalizedVendors;
+        private List<Mobile> m_InternalizedVendors;
 
         private int m_MaxLockDowns;
         private int m_MaxSecures;
         private int m_Price;
 
-        private int m_Visits;
+        private Dictionary<Mobile, DateTime> m_Visits;
 
         private DateTime m_BuiltOn, m_LastTraded;
 
@@ -403,32 +451,70 @@ namespace Server.Multis
 
         public virtual int GetAosMaxSecures()
         {
-            HousePlacementEntry hpe = this.GetAosEntry();
+            HousePlacementEntry hpe = GetAosEntry();
 
             if (hpe == null)
                 return 0;
 
-            return (int)(hpe.Storage * this.BonusStorageScalar);
+            return (int)(hpe.Storage * BonusStorageScalar);
         }
 
         public virtual int GetAosMaxLockdowns()
         {
-            HousePlacementEntry hpe = this.GetAosEntry();
+            HousePlacementEntry hpe = GetAosEntry();
 
             if (hpe == null)
                 return 0;
 
-            return (int)(hpe.Lockdowns * this.BonusStorageScalar);
+            return (int)(hpe.Lockdowns * BonusStorageScalar);
+        }
+
+        private Type[] _NoItemCountTable = new Type[]
+        {
+            typeof(Server.Engines.Plants.SeedBox),  typeof(GardenShedAddon),
+            typeof(GardenShedBarrel),               typeof(BaseSpecialScrollBook),    
+        };
+
+        private Type[] _NoDecayItems = new Type[]
+        {
+            typeof(BaseBoard),                      typeof(Aquarium),
+            typeof(FishBowl),                       typeof(BaseSpecialScrollBook),
+            typeof(Server.Engines.Plants.SeedBox)
+        };
+
+        // Not Included Storage
+        public virtual bool CheckCounts(Item item)
+        {
+            if (_NoItemCountTable.Any(x => item.GetType() == x || item.GetType().IsSubclassOf(x)))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        // Contents will not decay
+        public virtual bool CheckContentsDecay(Item item)
+        {
+            if (_NoDecayItems.Any(x => item.GetType() == x ||item.GetType().IsSubclassOf(x)))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         public virtual int GetAosCurSecures(out int fromSecures, out int fromVendors, out int fromLockdowns, out int fromMovingCrate)
         {
+            /* Secured container, container counts as fromLockdowns, items count as fromSecures
+             * Locked Down Container, container and items count as fromLockdowns */
+
             fromSecures = 0;
             fromVendors = 0;
             fromLockdowns = 0;
             fromMovingCrate = 0;
 
-            ArrayList list = this.m_Secures;
+            List<SecureInfo> list = m_Secures;
 
             if (list != null)
             {
@@ -436,18 +522,20 @@ namespace Server.Multis
                 {
                     SecureInfo si = (SecureInfo)list[i];
 
-                    if(!(si.Item is Server.Engines.Plants.SeedBox))
+                    if (CheckCounts(si.Item) && !m_LockDowns.ContainsKey(si.Item))
+                    {
                         fromSecures += si.Item.TotalItems;
+                    }
                 }
 
-                fromLockdowns += list.Count;
+                fromLockdowns += list.Where(x => !m_LockDowns.ContainsKey(x.Item)).Count();
             }
 
-            fromLockdowns += this.GetLockdowns();
+            fromLockdowns += GetLockdowns();
 
             if (!NewVendorSystem)
             {
-                foreach (PlayerVendor vendor in this.PlayerVendors)
+                foreach (PlayerVendor vendor in PlayerVendors)
                 {
                     if (vendor.Backpack != null)
                     {
@@ -456,11 +544,11 @@ namespace Server.Multis
                 }
             }
 
-            if (this.MovingCrate != null)
+            if (MovingCrate != null)
             {
-                fromMovingCrate += this.MovingCrate.TotalItems;
+                fromMovingCrate += MovingCrate.TotalItems;
 
-                foreach (Item item in this.MovingCrate.Items)
+                foreach (Item item in MovingCrate.Items)
                 {
                     if (item is PackingBox)
                         fromMovingCrate--;
@@ -472,10 +560,10 @@ namespace Server.Multis
 
         public bool InRange(IPoint2D from, int range)
         {
-            if (this.Region == null)
+            if (Region == null)
                 return false;
 
-            foreach (Rectangle3D rect in this.Region.Area)
+            foreach (Rectangle3D rect in Region.Area)
             {
                 if (from.X >= rect.Start.X - range && from.Y >= rect.Start.Y - range && from.X < rect.End.X + range && from.Y < rect.End.Y + range)
                     return true;
@@ -486,30 +574,30 @@ namespace Server.Multis
 
         public virtual int GetNewVendorSystemMaxVendors()
         {
-            HousePlacementEntry hpe = this.GetAosEntry();
+            HousePlacementEntry hpe = GetAosEntry();
 
             if (hpe == null)
                 return 0;
 
-            return (int)(hpe.Vendors * this.BonusStorageScalar);
+            return (int)(hpe.Vendors * BonusStorageScalar);
         }
 
         public virtual bool CanPlaceNewVendor()
         {
-            if (!this.IsAosRules)
+            if (!IsAosRules)
                 return true;
 
             if (!NewVendorSystem)
-                return this.CheckAosLockdowns(10);
+                return CheckAosLockdowns(10);
 
-            return ((this.PlayerVendors.Count + this.VendorRentalContracts.Count) < this.GetNewVendorSystemMaxVendors());
+            return ((PlayerVendors.Count + VendorRentalContracts.Count) < GetNewVendorSystemMaxVendors());
         }
 
         public const int MaximumBarkeepCount = 2;
 
         public virtual bool CanPlaceNewBarkeep()
         {
-            return (this.PlayerBarkeepers.Count < MaximumBarkeepCount);
+            return (PlayerBarkeepers.Count < MaximumBarkeepCount);
         }
 
         public static void IsThereVendor(Point3D location, Map map, out bool vendor, out bool rentalContract)
@@ -544,7 +632,7 @@ namespace Server.Multis
         {
             get
             {
-                foreach (PlayerVendor vendor in this.PlayerVendors)
+                foreach (PlayerVendor vendor in PlayerVendors)
                 {
                     if (!(vendor is RentedVendor))
                         return true;
@@ -558,7 +646,7 @@ namespace Server.Multis
         {
             get
             {
-                foreach (PlayerVendor vendor in this.PlayerVendors)
+                foreach (PlayerVendor vendor in PlayerVendors)
                 {
                     if (vendor is RentedVendor)
                         return true;
@@ -573,9 +661,9 @@ namespace Server.Multis
         {
             get
             {
-                foreach (Item item in this.Addons)
+                foreach (Item item in Addons.Keys)
                 {
-                    if (item is BaseAddonContainer || item is RaisedGardenSmallAddon || item is RaisedGardenLargeAddon || item is RaisedGardenEastAddon || item is RaisedGardenSouthAddon)
+                    if (item is BaseAddonContainer || item is RaisedGardenAddon || item is WallSafe)
                         return true;
                 }
 
@@ -589,7 +677,7 @@ namespace Server.Multis
         {
             get
             {
-                foreach (Item item in Addons)
+                foreach (Item item in Addons.Keys)
                 {
                     if (item is AuctionSafe && ((AuctionSafe)item).Auction != null && ((AuctionSafe)item).Auction.OnGoing)
                         return true;
@@ -599,12 +687,12 @@ namespace Server.Multis
             }
         }
         #endregion
-
-        public ArrayList AvailableVendorsFor(Mobile m)
+        
+        public List<Mobile> AvailableVendorsFor(Mobile m)
         {
-            ArrayList list = new ArrayList();
+            List<Mobile> list = new List<Mobile>();
 
-            foreach (PlayerVendor vendor in this.PlayerVendors)
+            foreach (PlayerVendor vendor in PlayerVendors)
             {
                 if (vendor.CanInteractWith(m, false))
                     list.Add(vendor);
@@ -615,7 +703,7 @@ namespace Server.Multis
 
         public bool AreThereAvailableVendorsFor(Mobile m)
         {
-            foreach (PlayerVendor vendor in this.PlayerVendors)
+            foreach (PlayerVendor vendor in PlayerVendors)
             {
                 if (vendor.CanInteractWith(m, false))
                     return true;
@@ -626,33 +714,18 @@ namespace Server.Multis
 
         public void MoveAllToCrate()
         {
-            this.RelocatedEntities.Clear();
+            RelocatedEntities.Clear();
 
-            if (this.MovingCrate != null)
-                this.MovingCrate.Hide();
+            if (MovingCrate != null)
+                MovingCrate.Hide();
 
-            if (this.m_Trash != null)
+            if (m_Trash != null)
             {
-                this.m_Trash.Delete();
-                this.m_Trash = null;
+                m_Trash.Delete();
+                m_Trash = null;
             }
 
-            foreach (Item item in this.LockDowns.Keys)
-            {
-                if (!item.Deleted)
-                {
-                    item.IsLockedDown = false;
-                    item.IsSecure = false;
-                    item.Movable = true;
-
-                    if (item.Parent == null)
-                        this.DropToMovingCrate(item);
-                }
-            }
-
-            this.LockDowns.Clear();
-
-            foreach (Item item in this.VendorRentalContracts)
+            foreach (Item item in LockDowns.Keys)
             {
                 if (!item.Deleted)
                 {
@@ -661,13 +734,28 @@ namespace Server.Multis
                     item.Movable = true;
 
                     if (item.Parent == null)
-                        this.DropToMovingCrate(item);
+                        DropToMovingCrate(item);
                 }
             }
 
-            this.VendorRentalContracts.Clear();
+            LockDowns.Clear();
 
-            foreach (SecureInfo info in this.Secures)
+            foreach (Item item in VendorRentalContracts)
+            {
+                if (!item.Deleted)
+                {
+                    item.IsLockedDown = false;
+                    item.IsSecure = false;
+                    item.Movable = true;
+
+                    if (item.Parent == null)
+                        DropToMovingCrate(item);
+                }
+            }
+
+            VendorRentalContracts.Clear();
+
+            foreach (SecureInfo info in Secures)
             {
                 Item item = info.Item;
 
@@ -681,13 +769,13 @@ namespace Server.Multis
                     item.Movable = true;
 
                     if (item.Parent == null)
-                        this.DropToMovingCrate(item);
+                        DropToMovingCrate(item);
                 }
             }
 
-            this.Secures.Clear();
+            Secures.Clear();
 
-            foreach (Item addon in this.Addons)
+            foreach (Item addon in Addons.Keys)
             {
                 if (!addon.Deleted)
                 {
@@ -733,28 +821,28 @@ namespace Server.Multis
                         if (retainDeedHue)
                             deed.Hue = hue;
 
-                        this.DropToMovingCrate(deed);
+                        DropToMovingCrate(deed);
                     }
                     else
                     {
-                        this.DropToMovingCrate(addon);
+                        DropToMovingCrate(addon);
                     }
                 }
             }
 
-            this.Addons.Clear();
+            Addons.Clear();
 
-            foreach (PlayerVendor mobile in this.PlayerVendors)
+            foreach (PlayerVendor mobile in PlayerVendors)
             {
                 mobile.Return();
                 mobile.Internalize();
-                this.InternalizedVendors.Add(mobile);
+                InternalizedVendors.Add(mobile);
             }
 
-            foreach (Mobile mobile in this.PlayerBarkeepers)
+            foreach (Mobile mobile in PlayerBarkeepers)
             {
                 mobile.Internalize();
-                this.InternalizedVendors.Add(mobile);
+                InternalizedVendors.Add(mobile);
             }
         }
 
@@ -762,25 +850,25 @@ namespace Server.Multis
         {
             Dictionary<IEntity, Mobile> list = new Dictionary<IEntity, Mobile>();
 
-            if (this.MovingCrate != null)
-                this.MovingCrate.Hide();
+            if (MovingCrate != null)
+                MovingCrate.Hide();
 
-            if (this.m_Trash != null && this.m_Trash.Map != Map.Internal)
-                list.Add(this.m_Trash, Owner);
+            if (m_Trash != null && m_Trash.Map != Map.Internal)
+                list.Add(m_Trash, Owner);
 
-            foreach (Item item in this.LockDowns.Keys)
+            foreach (Item item in LockDowns.Keys)
             {
                 if (item.Parent == null && item.Map != Map.Internal)
                     list.Add(item, LockDowns[item]);
             }
 
-            foreach (Item item in this.VendorRentalContracts)
+            foreach (Item item in VendorRentalContracts)
             {
                 if (item.Parent == null && item.Map != Map.Internal)
                     list.Add(item, Owner);
             }
 
-            foreach (SecureInfo info in this.Secures)
+            foreach (SecureInfo info in Secures.Where(i => !LockDowns.ContainsKey(i.Item)))
             {
                 Item item = info.Item;
 
@@ -788,13 +876,13 @@ namespace Server.Multis
                     list.Add(item, Owner);
             }
 
-            foreach (Item item in this.Addons)
+            foreach (Item item in Addons.Keys)
             {
                 if (item.Parent == null && item.Map != Map.Internal)
                     list.Add(item, Owner);
             }
 
-            foreach (PlayerVendor mobile in this.PlayerVendors)
+            foreach (PlayerVendor mobile in PlayerVendors)
             {
                 mobile.Return();
 
@@ -802,7 +890,7 @@ namespace Server.Multis
                     list.Add(mobile, Owner);
             }
 
-            foreach (Mobile mobile in this.PlayerBarkeepers)
+            foreach (Mobile mobile in PlayerBarkeepers)
             {
                 if (mobile.Map != Map.Internal)
                     list.Add(mobile, Owner);
@@ -813,14 +901,14 @@ namespace Server.Multis
 
         public void RelocateEntities()
         {
-            Dictionary<IEntity, Mobile> entities = this.GetHouseEntities();
+            Dictionary<IEntity, Mobile> entities = GetHouseEntities();
 
             foreach (IEntity entity in entities.Keys)
             {
-                Point3D relLoc = new Point3D(entity.X - this.X, entity.Y - this.Y, entity.Z - this.Z);
+                Point3D relLoc = new Point3D(entity.X - X, entity.Y - Y, entity.Z - Z);
                 RelocatedEntity relocEntity = new RelocatedEntity(entity, relLoc, entities[entity]);
 
-                this.RelocatedEntities.Add(relocEntity);
+                RelocatedEntities.Add(relocEntity);
 
                 if (entity is Item)
                     ((Item)entity).Internalize();
@@ -831,10 +919,10 @@ namespace Server.Multis
 
         public void RestoreRelocatedEntities()
         {
-            foreach (RelocatedEntity relocEntity in this.RelocatedEntities)
+            foreach (RelocatedEntity relocEntity in RelocatedEntities)
             {
                 Point3D relLoc = relocEntity.RelativeLocation;
-                Point3D location = new Point3D(relLoc.X + this.X, relLoc.Y + this.Y, relLoc.Z + this.Z);
+                Point3D location = new Point3D(relLoc.X + X, relLoc.Y + Y, relLoc.Z + Z);
 
                 IEntity entity = relocEntity.Entity;
 
@@ -846,9 +934,9 @@ namespace Server.Multis
                     {
                         if (item is IAddon)
                         {
-                            if (((IAddon)item).CouldFit(location, this.Map))
+                            if (((IAddon)item).CouldFit(location, Map))
                             {
-                                item.MoveToWorld(location, this.Map);
+                                item.MoveToWorld(location, Map);
                                 continue;
                             }
                         }
@@ -867,9 +955,9 @@ namespace Server.Multis
                                 requireSurface = false;
                             }
 
-                            if (this.Map.CanFit(location.X, location.Y, location.Z, height, false, false, requireSurface))
+                            if (Map.CanFit(location.X, location.Y, location.Z, height, false, false, requireSurface))
                             {
-                                item.MoveToWorld(location, this.Map);
+                                item.MoveToWorld(location, Map);
                                 continue;
                             }
                         }
@@ -882,7 +970,7 @@ namespace Server.Multis
                         }
                         else
                         {
-                            this.SetLockdown(relocEntity.Owner, item, false);
+                            SetLockdown(relocEntity.Owner, item, false);
                             item.IsSecure = false;
                             item.Movable = true;
 
@@ -893,7 +981,17 @@ namespace Server.Multis
 
                             if (item is IAddon)
                             {
-                                Item deed = ((IAddon)item).Deed;
+                                Item deed;
+
+                                if (item is FishTrophy)
+                                {
+                                    deed = ((FishTrophy)item).TrophyDeed;
+                                }
+                                else
+                                {
+                                    deed = ((IAddon)item).Deed;
+                                }
+
                                 bool retainDeedHue = false;	//if the items aren't hued but the deed itself is
                                 int hue = 0;
 
@@ -934,20 +1032,20 @@ namespace Server.Multis
                             }
 
                             if (relocateItem != null)
-                                this.DropToMovingCrate(relocateItem);
+                                DropToMovingCrate(relocateItem);
                         }
                     }
 
-                    if (this.m_Trash == item)
-                        this.m_Trash = null;
+                    if (m_Trash == item)
+                        m_Trash = null;
 
-                    this.LockDowns.Remove(item);
-                    this.VendorRentalContracts.Remove(item);
-                    this.Addons.Remove(item);
-                    for (int i = this.Secures.Count - 1; i >= 0; i--)
+                    LockDowns.Remove(item);
+                    VendorRentalContracts.Remove(item);
+                    Addons.Remove(item);
+                    for (int i = Secures.Count - 1; i >= 0; i--)
                     {
-                        if (((SecureInfo)this.Secures[i]).Item == item)
-                            this.Secures.RemoveAt(i);
+                        if (((SecureInfo)Secures[i]).Item == item)
+                            Secures.RemoveAt(i);
                     }
                 }
                 else
@@ -956,44 +1054,44 @@ namespace Server.Multis
 
                     if (!mobile.Deleted)
                     {
-                        if (this.Map.CanFit(location, 16, false, false))
+                        if (Map.CanFit(location, 16, false, false))
                         {
-                            mobile.MoveToWorld(location, this.Map);
+                            mobile.MoveToWorld(location, Map);
                         }
                         else
                         {
-                            this.InternalizedVendors.Add(mobile);
+                            InternalizedVendors.Add(mobile);
                         }
                     }
                 }
             }
 
-            this.RelocatedEntities.Clear();
+            RelocatedEntities.Clear();
         }
 
         public void DropToMovingCrate(Item item)
         {
-            if (this.MovingCrate == null)
-                this.MovingCrate = new MovingCrate(this);
+            if (MovingCrate == null)
+                MovingCrate = new MovingCrate(this);
 
-            this.MovingCrate.DropItem(item);
+            MovingCrate.DropItem(item);
         }
 
         public List<Item> GetItems()
         {
-            if (this.Map == null || this.Map == Map.Internal)
+            if (Map == null || Map == Map.Internal)
                 return new List<Item>();
 
-            Point2D start = new Point2D(this.X + this.Components.Min.X, this.Y + this.Components.Min.Y);
-            Point2D end = new Point2D(this.X + this.Components.Max.X + 1, this.Y + this.Components.Max.Y + 1);
+            Point2D start = new Point2D(X + Components.Min.X, Y + Components.Min.Y);
+            Point2D end = new Point2D(X + Components.Max.X + 1, Y + Components.Max.Y + 1);
             Rectangle2D rect = new Rectangle2D(start, end);
 
             List<Item> list = new List<Item>();
 
-            IPooledEnumerable eable = this.Map.GetItemsInBounds(rect);
+            IPooledEnumerable eable = Map.GetItemsInBounds(rect);
 
             foreach (Item item in eable)
-                if (item.Movable && this.IsInside(item))
+                if (item.Movable && IsInside(item))
                     list.Add(item);
 
             eable.Free();
@@ -1003,13 +1101,13 @@ namespace Server.Multis
 
         public List<Mobile> GetMobiles()
         {
-            if (this.Map == null || this.Map == Map.Internal)
+            if (Map == null || Map == Map.Internal)
                 return new List<Mobile>();
 
             List<Mobile> list = new List<Mobile>();
 
-            foreach (Mobile mobile in this.Region.GetMobiles())
-                if (this.IsInside(mobile))
+            foreach (Mobile mobile in Region.GetMobiles())
+                if (IsInside(mobile))
                     list.Add(mobile);
 
             return list;
@@ -1017,14 +1115,14 @@ namespace Server.Multis
 
         public virtual bool CheckAosLockdowns(int need)
         {
-            return ((this.GetAosCurLockdowns() + need) <= this.GetAosMaxLockdowns());
+            return ((GetAosCurLockdowns() + need) <= GetAosMaxLockdowns());
         }
 
         public virtual bool CheckAosStorage(int need)
         {
             int fromSecures, fromVendors, fromLockdowns, fromMovingCrate;
 
-            return ((this.GetAosCurSecures(out fromSecures, out fromVendors, out fromLockdowns, out fromMovingCrate) + need) <= this.GetAosMaxSecures());
+            return ((GetAosCurSecures(out fromSecures, out fromVendors, out fromLockdowns, out fromMovingCrate) + need) <= GetAosMaxSecures());
         }
 
         public static void Configure()
@@ -1039,13 +1137,13 @@ namespace Server.Multis
         {
             int v = 0;
 
-            v += this.GetLockdowns();
+            v += GetLockdowns();
 
-            if (this.m_Secures != null)
-                v += this.m_Secures.Count;
+            if (m_Secures != null)
+                v += m_Secures.Where(x => !m_LockDowns.ContainsKey(x.Item)).Count();
 
             if (!NewVendorSystem)
-                v += this.PlayerVendors.Count * 10;
+                v += PlayerVendors.Count * 10;
 
             return v;
         }
@@ -1177,23 +1275,23 @@ namespace Server.Multis
 
         public bool IsInside(Mobile m)
         {
-            if (m == null || m.Deleted || m.Map != this.Map)
+            if (m == null || m.Deleted || m.Map != Map)
                 return false;
 
-            return this.IsInside(m.Location, 16);
+            return IsInside(m.Location, 16);
         }
 
         public bool IsInside(Item item)
         {
-            if (item == null || item.Deleted || item.Map != this.Map)
+            if (item == null || item.Deleted || item.Map != Map)
                 return false;
 
-            return this.IsInside(item.Location, item.ItemData.Height);
+            return IsInside(item.Location, item.ItemData.Height);
         }
 
         public bool CheckAccessibility(Item item, Mobile from)
         {
-            SecureAccessResult res = this.CheckSecureAccess(from, item);
+            SecureAccessResult res = CheckSecureAccess(from, item);
 
             switch ( res )
             {
@@ -1205,58 +1303,71 @@ namespace Server.Multis
                     return false;
             }
 
-            if (!this.IsLockedDown(item))
+            // staff or not locked down
+            if (from.AccessLevel >= AccessLevel.GameMaster || IsOwner(from) || !IsLockedDown(item))
                 return true;
-            else if (from.AccessLevel >= AccessLevel.GameMaster)
+
+            // ISecurable will set its own rules
+            if (item is ISecurable)
+                return HasSecureAccess(from, ((ISecurable)item).Level);
+
+            if (item.Stackable)
                 return true;
-            else if (item is Runebook)
-                return true;
-            else if (item is ISecurable)
-                return this.HasSecureAccess(from, ((ISecurable)item).Level);
-            else if (item is Container)
-                return this.IsCoOwner(from);
-            else if (item.Stackable)
-                return true;
-            else if (item is BaseLight)
-                return this.IsFriend(from);
-            else if (item is PotionKeg)
-                return this.IsFriend(from);
-            else if (item is BaseBoard)
-                return true;
-            else if (item is Dices)
-                return true;
-            else if (item is RecallRune)
-                return true;
-            else if (item is TreasureMap)
-                return true;
-            else if (item is Clock)
-                return true;
-            else if (item is BaseInstrument)
-                return true;
-            else if (item is Dyes || item is DyeTub)
-                return true;
-            else if (item is VendorRentalContract)
-                return true;
-            else if (item is RewardBrazier)
-                return true;
+
+            // locked down
+            if (m_LockDowns.ContainsKey(item))
+            {
+                // non friend, but item is on friends only list
+                if (!IsFriend(from) && IsInList(item, _AccessibleToFriends))
+                    return false;
+
+                // anyone can use list, house must be public or player must have access to house
+                if (IsInList(item, _AccessibleToAll) && (m_Public || m_Access.Contains(from)))
+                    return true;
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool IsInList(Item item, Type[] list)
+        {
+            foreach (var t in list)
+            {
+                if (t == item.GetType() || item.GetType().IsSubclassOf(t))
+                    return true;
+            }
 
             return false;
         }
 
+        private Type[] _AccessibleToAll =
+        {
+            typeof(TenthAnniversarySculpture), typeof(RewardBrazier), typeof(VendorRentalContract), typeof(Dyes), typeof(DyeTub),
+            typeof(BaseInstrument), typeof(Clock), typeof(TreasureMap), typeof(RecallRune), typeof(Dices), typeof(BaseBoard), 
+            typeof(Runebook)
+        };
+
+        private Type[] _AccessibleToFriends =
+        {
+            typeof(PotionKeg)
+        };
+
         public virtual bool IsInside(Point3D p, int height)
         {
-            if (this.Deleted)
+            if (Deleted)
                 return false;
 
-            MultiComponentList mcl = this.Components;
+            MultiComponentList mcl = Components;
 
-            int x = p.X - (this.X + mcl.Min.X);
-            int y = p.Y - (this.Y + mcl.Min.Y);
+            int x = p.X - (X + mcl.Min.X);
+            int y = p.Y - (Y + mcl.Min.Y);
 
             if (x < 0 || x >= mcl.Width || y < 0 || y >= mcl.Height)
                 return false;
 
-            if (this is HouseFoundation && y < (mcl.Height - 1) && p.Z >= this.Z)
+            if (this is HouseFoundation && y < (mcl.Height - 1) && p.Z >= Z)
                 return true;
 
             StaticTile[] tiles = mcl.Tiles[x][y];
@@ -1275,26 +1386,29 @@ namespace Server.Multis
                 if ((id >= 0xB95 && id <= 0xC0E) || (id >= 0xC43 && id <= 0xC44))
                     continue;
 
-                int tileZ = tile.Z + this.Z;
+                int tileZ = tile.Z + Z;
 
                 if (p.Z == tileZ || (p.Z + height) > tileZ)
                     return true;
             }
+
+            if (tiles.Length == 0 && this is Castle)
+                return true;
 
             return false;
         }
 
         public SecureAccessResult CheckSecureAccess(Mobile m, Item item)
         {
-            if (this.m_Secures == null || !(item is Container))
+            if (m_Secures == null || !(item is Container))
                 return SecureAccessResult.Insecure;
 
-            for (int i = 0; i < this.m_Secures.Count; ++i)
+            for (int i = 0; i < m_Secures.Count; ++i)
             {
-                SecureInfo info = (SecureInfo)this.m_Secures[i];
+                SecureInfo info = (SecureInfo)m_Secures[i];
 
                 if (info.Item == item)
-                    return this.HasSecureAccess(m, info.Level) ? SecureAccessResult.Accessible : SecureAccessResult.Inaccessible;
+                    return HasSecureAccess(m, info) ? SecureAccessResult.Accessible : SecureAccessResult.Inaccessible;
             }
 
             return SecureAccessResult.Insecure;
@@ -1315,32 +1429,35 @@ namespace Server.Multis
         {
             m_AllHouses.Add(this);
 
-            this.m_LastRefreshed = DateTime.UtcNow;
+            m_LastRefreshed = DateTime.UtcNow;
 
-            this.m_BuiltOn = DateTime.UtcNow;
-            this.m_LastTraded = DateTime.MinValue;
+            m_BuiltOn = DateTime.UtcNow;
+            m_LastTraded = DateTime.MinValue;
 
-            this.m_Doors = new ArrayList();
-            this.m_LockDowns = new Dictionary<Item, Mobile>();
-            this.m_Secures = new ArrayList();
-            this.m_Addons = new ArrayList();
+            m_Doors = new List<Item>();
+            m_LockDowns = new Dictionary<Item, Mobile>();
+            m_Secures = new List<SecureInfo>();
+            m_Addons = new Dictionary<Item, Mobile>();
+            m_Carpets = new List<Item>();
 
-            this.m_CoOwners = new ArrayList();
-            this.m_Friends = new ArrayList();
-            this.m_Bans = new ArrayList();
-            this.m_Access = new ArrayList();
+            m_CoOwners = new List<Mobile>();
+            m_Friends = new List<Mobile>();
+            m_Bans = new List<Mobile>();
+            m_Access = new List<Mobile>();
 
-            this.m_VendorRentalContracts = new ArrayList();
-            this.m_InternalizedVendors = new ArrayList();
+            m_VendorRentalContracts = new List<Item>();
+            m_InternalizedVendors = new List<Mobile>();
 
-            this.m_Owner = owner;
+            m_Visits = new Dictionary<Mobile, DateTime>();
 
-            this.m_MaxLockDowns = MaxLockDown;
-            this.m_MaxSecures = MaxSecure;
+            m_Owner = owner;
 
-            this.m_RelativeBanLocation = this.BaseBanLocation;
+            m_MaxLockDowns = MaxLockDown;
+            m_MaxSecures = MaxSecure;
 
-            this.UpdateRegion();
+            m_RelativeBanLocation = BaseBanLocation;
+
+            UpdateRegion();
 
             if (owner != null)
             {
@@ -1353,7 +1470,7 @@ namespace Server.Multis
                 list.Add(this);
             }
 
-            this.Movable = false;
+            Movable = false;
         }
 
         public BaseHouse(Serial serial)
@@ -1364,33 +1481,33 @@ namespace Server.Multis
 
         public override void OnMapChange()
         {
-            if (this.m_LockDowns == null)
+            if (m_LockDowns == null)
                 return;
 
-            this.UpdateRegion();
+            UpdateRegion();
 
-            if (this.m_Sign != null && !this.m_Sign.Deleted)
-                this.m_Sign.Map = this.Map;
+            if (m_Sign != null && !m_Sign.Deleted)
+                m_Sign.Map = Map;
 
-            if (this.m_Doors != null)
+            if (m_Doors != null)
             {
-                foreach (Item item in this.m_Doors)
-                    item.Map = this.Map;
+                foreach (Item item in m_Doors)
+                    item.Map = Map;
             }
 
-            foreach (IEntity entity in this.GetHouseEntities().Keys)
+            foreach (IEntity entity in GetHouseEntities().Keys)
             {
                 if (entity is Item)
-                    ((Item)entity).Map = this.Map;
+                    ((Item)entity).Map = Map;
                 else
-                    ((Mobile)entity).Map = this.Map;
+                    ((Mobile)entity).Map = Map;
             }
         }
 
         public virtual void ChangeSignType(int itemID)
         {
-            if (this.m_Sign != null)
-                this.m_Sign.ItemID = itemID;
+            if (m_Sign != null)
+                m_Sign.ItemID = itemID;
         }
 
         public abstract Rectangle2D[] Area { get; }
@@ -1398,44 +1515,44 @@ namespace Server.Multis
 
         public virtual void UpdateRegion()
         {
-            if (this.m_Region != null)
-                this.m_Region.Unregister();
+            if (m_Region != null)
+                m_Region.Unregister();
 
-            if (this.Map != null)
+            if (Map != null)
             {
-                this.m_Region = new HouseRegion(this);
-                this.m_Region.Register();
+                m_Region = new HouseRegion(this);
+                m_Region.Register();
             }
             else
             {
-                this.m_Region = null;
+                m_Region = null;
             }
         }
 
         public override void OnLocationChange(Point3D oldLocation)
         {
-            if (this.m_LockDowns == null)
+            if (m_LockDowns == null)
                 return;
 
             int x = base.Location.X - oldLocation.X;
             int y = base.Location.Y - oldLocation.Y;
             int z = base.Location.Z - oldLocation.Z;
 
-            if (this.m_Sign != null && !this.m_Sign.Deleted)
-                this.m_Sign.Location = new Point3D(this.m_Sign.X + x, this.m_Sign.Y + y, this.m_Sign.Z + z);
+            if (m_Sign != null && !m_Sign.Deleted)
+                m_Sign.Location = new Point3D(m_Sign.X + x, m_Sign.Y + y, m_Sign.Z + z);
 
-            this.UpdateRegion();
+            UpdateRegion();
 
-            if (this.m_Doors != null)
+            if (m_Doors != null)
             {
-                foreach (Item item in this.m_Doors)
+                foreach (Item item in m_Doors)
                 {
                     if (!item.Deleted)
                         item.Location = new Point3D(item.X + x, item.Y + y, item.Z + z);
                 }
             }
 
-            foreach (IEntity entity in this.GetHouseEntities().Keys)
+            foreach (IEntity entity in GetHouseEntities().Keys)
             {
                 Point3D newLocation = new Point3D(entity.X + x, entity.Y + y, entity.Z + z);
 
@@ -1448,75 +1565,75 @@ namespace Server.Multis
 
         public BaseDoor AddEastDoor(int x, int y, int z)
         {
-            return this.AddEastDoor(true, x, y, z);
+            return AddEastDoor(true, x, y, z);
         }
 
         public BaseDoor AddEastDoor(bool wood, int x, int y, int z)
         {
-            BaseDoor door = this.MakeDoor(wood, DoorFacing.SouthCW);
+            BaseDoor door = MakeDoor(wood, DoorFacing.SouthCW);
 
-            this.AddDoor(door, x, y, z);
+            AddDoor(door, x, y, z);
 
             return door;
         }
 
         public BaseDoor AddSouthDoor(int x, int y, int z)
         {
-            return this.AddSouthDoor(true, x, y, z);
+            return AddSouthDoor(true, x, y, z);
         }
 
         public BaseDoor AddSouthDoor(bool wood, int x, int y, int z)
         {
-            BaseDoor door = this.MakeDoor(wood, DoorFacing.WestCW);
+            BaseDoor door = MakeDoor(wood, DoorFacing.WestCW);
 
-            this.AddDoor(door, x, y, z);
+            AddDoor(door, x, y, z);
 
             return door;
         }
 
         public BaseDoor AddEastDoor(int x, int y, int z, uint k)
         {
-            return this.AddEastDoor(true, x, y, z, k);
+            return AddEastDoor(true, x, y, z, k);
         }
 
         public BaseDoor AddEastDoor(bool wood, int x, int y, int z, uint k)
         {
-            BaseDoor door = this.MakeDoor(wood, DoorFacing.SouthCW);
+            BaseDoor door = MakeDoor(wood, DoorFacing.SouthCW);
 
             door.Locked = true;
             door.KeyValue = k;
 
-            this.AddDoor(door, x, y, z);
+            AddDoor(door, x, y, z);
 
             return door;
         }
 
         public BaseDoor AddSouthDoor(int x, int y, int z, uint k)
         {
-            return this.AddSouthDoor(true, x, y, z, k);
+            return AddSouthDoor(true, x, y, z, k);
         }
 
         public BaseDoor AddSouthDoor(bool wood, int x, int y, int z, uint k)
         {
-            BaseDoor door = this.MakeDoor(wood, DoorFacing.WestCW);
+            BaseDoor door = MakeDoor(wood, DoorFacing.WestCW);
 
             door.Locked = true;
             door.KeyValue = k;
 
-            this.AddDoor(door, x, y, z);
+            AddDoor(door, x, y, z);
 
             return door;
         }
 
         public BaseDoor[] AddSouthDoors(int x, int y, int z, uint k)
         {
-            return this.AddSouthDoors(true, x, y, z, k);
+            return AddSouthDoors(true, x, y, z, k);
         }
 
         public BaseDoor[] AddSouthDoors(bool wood, int x, int y, int z, uint k)
         {
-            BaseDoor westDoor = this.MakeDoor(wood, DoorFacing.WestCW);
-            BaseDoor eastDoor = this.MakeDoor(wood, DoorFacing.EastCCW);
+            BaseDoor westDoor = MakeDoor(wood, DoorFacing.WestCW);
+            BaseDoor eastDoor = MakeDoor(wood, DoorFacing.EastCCW);
 
             westDoor.Locked = true;
             eastDoor.Locked = true;
@@ -1527,8 +1644,8 @@ namespace Server.Multis
             westDoor.Link = eastDoor;
             eastDoor.Link = westDoor;
 
-            this.AddDoor(westDoor, x, y, z);
-            this.AddDoor(eastDoor, x + 1, y, z);
+            AddDoor(westDoor, x, y, z);
+            AddDoor(eastDoor, x + 1, y, z);
 
             return new BaseDoor[2] { westDoor, eastDoor };
         }
@@ -1537,7 +1654,7 @@ namespace Server.Multis
         {
             uint value = Key.RandomValue();
 
-            if (!this.IsAosRules)
+            if (!IsAosRules)
             {
                 Key packKey = new Key(KeyType.Gold);
                 Key bankKey = new Key(KeyType.Gold);
@@ -1561,19 +1678,19 @@ namespace Server.Multis
 
         public BaseDoor[] AddSouthDoors(int x, int y, int z)
         {
-            return this.AddSouthDoors(true, x, y, z, false);
+            return AddSouthDoors(true, x, y, z, false);
         }
 
         public BaseDoor[] AddSouthDoors(bool wood, int x, int y, int z, bool inv)
         {
-            BaseDoor westDoor = this.MakeDoor(wood, inv ? DoorFacing.WestCCW : DoorFacing.WestCW);
-            BaseDoor eastDoor = this.MakeDoor(wood, inv ? DoorFacing.EastCW : DoorFacing.EastCCW);
+            BaseDoor westDoor = MakeDoor(wood, inv ? DoorFacing.WestCCW : DoorFacing.WestCW);
+            BaseDoor eastDoor = MakeDoor(wood, inv ? DoorFacing.EastCW : DoorFacing.EastCCW);
 
             westDoor.Link = eastDoor;
             eastDoor.Link = westDoor;
 
-            this.AddDoor(westDoor, x, y, z);
-            this.AddDoor(eastDoor, x + 1, y, z);
+            AddDoor(westDoor, x, y, z);
+            AddDoor(eastDoor, x + 1, y, z);
 
             return new BaseDoor[2] { westDoor, eastDoor };
         }
@@ -1588,18 +1705,18 @@ namespace Server.Multis
 
         public void AddDoor(BaseDoor door, int xoff, int yoff, int zoff)
         {
-            door.MoveToWorld(new Point3D(xoff + this.X, yoff + this.Y, zoff + this.Z), this.Map);
-            this.m_Doors.Add(door);
+            door.MoveToWorld(new Point3D(xoff + X, yoff + Y, zoff + Z), Map);
+            m_Doors.Add(door);
         }
 
         public void AddTrashBarrel(Mobile from)
         {
-            if (!this.IsActive)
+            if (!IsActive)
                 return;
 
-            for (int i = 0; this.m_Doors != null && i < this.m_Doors.Count; ++i)
+            for (int i = 0; m_Doors != null && i < m_Doors.Count; ++i)
             {
-                BaseDoor door = this.m_Doors[i] as BaseDoor;
+                BaseDoor door = m_Doors[i] as BaseDoor;
                 Point3D p = door.Location;
 
                 if (door.Open)
@@ -1615,12 +1732,12 @@ namespace Server.Multis
                 }
             }
 
-            if (this.m_Trash == null || this.m_Trash.Deleted)
+            if (m_Trash == null || m_Trash.Deleted)
             {
-                this.m_Trash = new TrashBarrel();
+                m_Trash = new TrashBarrel();
 
-                this.m_Trash.Movable = false;
-                this.m_Trash.MoveToWorld(from.Location, from.Map);
+                m_Trash.Movable = false;
+                m_Trash.MoveToWorld(from.Location, from.Map);
 
                 from.SendLocalizedMessage(502121); /* You have a new trash barrel.
                 * Three minutes after you put something in the barrel, the trash will be emptied.
@@ -1634,72 +1751,92 @@ namespace Server.Multis
 
         public void SetSign(int xoff, int yoff, int zoff)
         {
-            this.m_Sign = new HouseSign(this);
-            this.m_Sign.MoveToWorld(new Point3D(this.X + xoff, this.Y + yoff, this.Z + zoff), this.Map);
+            m_Sign = new HouseSign(this);
+            m_Sign.MoveToWorld(new Point3D(X + xoff, Y + yoff, Z + zoff), Map);
         }
 
-        private void SetLockdown(Mobile m, Item i, bool locked)
+        public void SetLockdown(Item i, bool locked)
         {
-            this.SetLockdown(m, i, locked, false);
+            SetLockdown(null, i, locked);
         }
 
-        private void SetLockdown(Mobile m, Item i, bool locked, bool checkContains)
+        public void SetLockdown(Mobile m, Item i, bool locked)
         {
-            if (this.m_LockDowns == null)
+            if (m_LockDowns == null || (locked && m_LockDowns.ContainsKey(i)) || (!locked && !m_LockDowns.ContainsKey(i)))
                 return;
 
-            #region Mondain's Legacy
             if (i is BaseAddonContainer)
                 i.Movable = false;
             else
-            #endregion
+            	i.Movable = !locked;
 
-            i.Movable = !locked;
             i.IsLockedDown = locked;
+
+            if (i is BaseContainer)
+            {
+                if (!locked)
+                {
+                    var secure = GetSecureInfoFor(i);
+
+                    if (secure != null)
+                        m_Secures.Remove(secure);
+                }
+                else
+                {
+                    m_Secures.Add(new SecureInfo(i, SecureLevel.Owner, m, true));
+                }
+            }
 
             if (m == null)
                 m = Owner;
+
+            Timer.DelayCall(() =>
+                i.PrivateOverheadMessage(MessageType.Regular, 0, locked ? 501721 : 501657, m.NetState)); // locked down! : [no longer locked down]
 
             if (locked)
             {
                 if (i is VendorRentalContract)
                 {
-                    if (!this.VendorRentalContracts.Contains(i))
-                        this.VendorRentalContracts.Add(i);
+                    if (!VendorRentalContracts.Contains(i))
+                        VendorRentalContracts.Add(i);
                 }
                 else
                 {
-                    if (!checkContains || !this.m_LockDowns.ContainsKey(i))
-                        this.m_LockDowns.Add(i, m);
+                    m_LockDowns[i] = m;
                 }
             }
             else
             {
-                this.VendorRentalContracts.Remove(i);
-                this.m_LockDowns.Remove(i);
+                VendorRentalContracts.Remove(i);
+                m_LockDowns.Remove(i);
+
+                var secure = GetSecureInfoFor(i);
+
+                if (secure != null)
+                    m_Secures.Remove(secure);
             }
 
             if (!locked)
                 i.SetLastMoved();
 
-            if ((i is Container) && (!locked || !(i is BaseBoard || i is Aquarium || i is FishBowl)))
+            if (i is Container && CheckContentsDecay(i))
             {
                 foreach (Item c in i.Items)
-                    this.SetLockdown(m, c, locked, checkContains);
+                    SetLockdown(m, c, locked);
             }
         }
 
         public bool LockDown(Mobile m, Item item)
         {
-            return this.LockDown(m, item, true);
+            return LockDown(m, item, true);
         }
 
         public bool LockDown(Mobile m, Item item, bool checkIsInside)
         {
-            if (!this.IsCoOwner(m) || !this.IsActive)
+            if (!IsFriend(m) || !IsActive)
                 return false;
 
-            if ((item is BaseAddonContainer || item.Movable) && !this.IsSecure(item))
+            if ((item is BaseAddonContainer || item.Movable) && !IsSecure(item))
             {
                 int amt = 1 + item.TotalItems;
 
@@ -1710,7 +1847,7 @@ namespace Server.Multis
                 {
                     m.SendLocalizedMessage(1005525);//That is not in your house
                 }
-                else if (checkIsInside && !this.IsInside(item.GetWorldLocation(), item.ItemData.Height))
+                else if (checkIsInside && !IsInside(item.GetWorldLocation(), item.ItemData.Height))
                 {
                     m.SendLocalizedMessage(1005525);//That is not in your house
                 }
@@ -1718,25 +1855,25 @@ namespace Server.Multis
                 {
                     m.SendLocalizedMessage(1005377);//You cannot lock that down
                 }
-                else if (this.IsSecure(rootItem))
+                else if (IsSecure(rootItem))
                 {
                     m.SendLocalizedMessage(501737); // You need not lock down items in a secure container.
                 }
-                else if (parentItem != null && !this.IsLockedDown(parentItem))
+                else if (parentItem != null && !IsLockedDown(parentItem))
                 {
                     m.SendLocalizedMessage(501736); // You must lockdown the container first!
                 }
-                else if (!(item is VendorRentalContract) && (this.IsAosRules ? (!this.CheckAosLockdowns(amt) || !this.CheckAosStorage(amt)) : (this.LockDownCount + amt) > this.m_MaxLockDowns))
+                else if (!(item is VendorRentalContract) && (IsAosRules ? (!CheckAosLockdowns(amt) || !CheckAosStorage(amt)) : (LockDownCount + amt) > m_MaxLockDowns))
                 {
                     m.SendLocalizedMessage(1005379);//That would exceed the maximum lock down limit for this house
                 }
                 else
                 {
-                    this.SetLockdown(m, item, true);
+                    SetLockdown(m, item, true);
                     return true;
                 }
             }
-            else if (this.m_LockDowns.ContainsKey(item))
+            else if (m_LockDowns.ContainsKey(item))
             {
                 m.LocalOverheadMessage(MessageType.Regular, 0x3E9, 1005526); //That is already locked down
                 return true;
@@ -1768,10 +1905,10 @@ namespace Server.Multis
             public TransferItem(BaseHouse house)
                 : base(0x14F0)
             {
-                this.m_House = house;
+                m_House = house;
 
-                this.Hue = 0x480;
-                this.Movable = false;
+                Hue = 0x480;
+                Movable = false;
             }
 
             public override void GetProperties(ObjectPropertyList list)
@@ -1780,9 +1917,9 @@ namespace Server.Multis
 
                 string houseName, owner, location;
 
-                houseName = (this.m_House == null ? "an unnamed house" : this.m_House.Sign.GetName());
+                houseName = (m_House == null ? "an unnamed house" : m_House.Sign.GetName());
 
-                Mobile houseOwner = (this.m_House == null ? null : this.m_House.Owner);
+                Mobile houseOwner = (m_House == null ? null : m_House.Owner);
 
                 if (houseOwner == null)
                     owner = "nobody";
@@ -1792,7 +1929,7 @@ namespace Server.Multis
                 int xLong = 0, yLat = 0, xMins = 0, yMins = 0;
                 bool xEast = false, ySouth = false;
 
-                bool valid = this.m_House != null && Sextant.Format(this.m_House.Location, this.m_House.Map, ref xLong, ref yLat, ref xMins, ref yMins, ref xEast, ref ySouth);
+                bool valid = m_House != null && Sextant.Format(m_House.Location, m_House.Map, ref xLong, ref yLat, ref xMins, ref yMins, ref xEast, ref ySouth);
 
                 if (valid)
                     location = String.Format("{0}° {1}'{2}, {3}° {4}'{5}", yLat, yMins, ySouth ? "S" : "N", xLong, xMins, xEast ? "E" : "W");
@@ -1822,7 +1959,7 @@ namespace Server.Multis
 
                 int version = reader.ReadInt();
 
-                this.Delete();
+                Delete();
             }
 
             public override bool AllowSecureTrade(Mobile from, Mobile to, Mobile newOwner, bool accepted)
@@ -1832,26 +1969,26 @@ namespace Server.Multis
                 else if (!accepted)
                     return true;
 
-                if (this.Deleted || this.m_House == null || this.m_House.Deleted || !this.m_House.IsOwner(from) || !from.CheckAlive() || !to.CheckAlive())
+                if (Deleted || m_House == null || m_House.Deleted || !m_House.IsOwner(from) || !from.CheckAlive() || !to.CheckAlive())
                     return false;
 
-                if (BaseHouse.HasAccountHouse(to))
+                if (BaseHouse.AtAccountHouseLimit(to))
                 {
                     from.SendLocalizedMessage(501388); // You cannot transfer ownership to another house owner or co-owner!
                     return false;
                 }
 
-                return this.m_House.CheckTransferPosition(from, to);
+                return m_House.CheckTransferPosition(from, to);
             }
 
             public override void OnSecureTrade(Mobile from, Mobile to, Mobile newOwner, bool accepted)
             {
-                if (this.Deleted)
+                if (Deleted)
                     return;
 
-                this.Delete();
+                Delete();
 
-                if (this.m_House == null || this.m_House.Deleted || !this.m_House.IsOwner(from) || !from.CheckAlive() || !to.CheckAlive())
+                if (m_House == null || m_House.Deleted || !m_House.IsOwner(from) || !from.CheckAlive() || !to.CheckAlive())
                     return;
 
                 if (!accepted)
@@ -1863,31 +2000,31 @@ namespace Server.Multis
                 * You should double-check the security settings on any doors and teleporters in the house.
                 */
 
-                this.m_House.RemoveKeys(from);
-                this.m_House.Owner = to;
-                this.m_House.Bans.Clear();
-                this.m_House.Friends.Clear();
-                this.m_House.CoOwners.Clear();
-                this.m_House.ChangeLocks(to);
-                this.m_House.LastTraded = DateTime.UtcNow;
+                m_House.RemoveKeys(from);
+                m_House.Owner = to;
+                m_House.Bans.Clear();
+                m_House.Friends.Clear();
+                m_House.CoOwners.Clear();
+                m_House.ChangeLocks(to);
+                m_House.LastTraded = DateTime.UtcNow;
             }
         }
 
         public bool CheckTransferPosition(Mobile from, Mobile to)
         {
             bool isValid = true;
-            Item sign = this.m_Sign;
+            Item sign = m_Sign;
             Point3D p = (sign == null ? Point3D.Zero : sign.GetWorldLocation());
 
-            if (from.Map != this.Map || to.Map != this.Map)
+            if (from.Map != Map || to.Map != Map)
                 isValid = false;
             else if (sign == null)
                 isValid = false;
             else if (from.Map != sign.Map || to.Map != sign.Map)
                 isValid = false;
-            else if (this.IsInside(from))
+            else if (IsInside(from))
                 isValid = false;
-            else if (this.IsInside(to))
+            else if (IsInside(to))
                 isValid = false;
             else if (!from.InRange(p, 2))
                 isValid = false;
@@ -1902,14 +2039,14 @@ namespace Server.Multis
 
         public void BeginConfirmTransfer(Mobile from, Mobile to)
         {
-            if (this.Deleted || !from.CheckAlive() || !this.IsOwner(from))
+            if (Deleted || !from.CheckAlive() || !IsOwner(from))
                 return;
 
-            if (NewVendorSystem && this.HasPersonalVendors)
+            if (NewVendorSystem && HasPersonalVendors)
             {
                 from.SendLocalizedMessage(1062467); // You cannot trade this house while you still have personal vendors inside.
             }
-            else if (this.DecayLevel == DecayLevel.DemolitionPending)
+            else if (DecayLevel == DecayLevel.DemolitionPending)
             {
                 from.SendLocalizedMessage(1005321); // This house has been marked for demolition, and it cannot be transferred.
             }
@@ -1919,15 +2056,15 @@ namespace Server.Multis
             }
             else if (to.Player)
             {
-                if (BaseHouse.HasAccountHouse(to))
+                if (BaseHouse.AtAccountHouseLimit(to))
                 {
                     from.SendLocalizedMessage(501388); // You cannot transfer ownership to another house owner or co-owner!
                 }
-                else if (this.CheckTransferPosition(from, to))
+                else if (CheckTransferPosition(from, to))
                 {
                     from.SendLocalizedMessage(1005326); // Please wait while the other player verifies the transfer.
 
-                    if (this.HasRentedVendors)
+                    if (HasRentedVendors)
                     {
                         /* You are about to be traded a home that has active vendor contracts.
                         * While there are active vendor contracts in this house, you
@@ -1954,10 +2091,10 @@ namespace Server.Multis
         {
             Mobile from = (Mobile)state;
 
-            if (!ok || this.Deleted || !from.CheckAlive() || !this.IsOwner(from))
+            if (!ok || Deleted || !from.CheckAlive() || !IsOwner(from))
                 return;
 
-            if (this.CheckTransferPosition(from, to))
+            if (CheckTransferPosition(from, to))
             {
                 to.CloseGump(typeof(Gumps.HouseTransferGump));
                 to.SendGump(new Gumps.HouseTransferGump(from, to, this));
@@ -1966,14 +2103,14 @@ namespace Server.Multis
 
         public void EndConfirmTransfer(Mobile from, Mobile to)
         {
-            if (this.Deleted || !from.CheckAlive() || !this.IsOwner(from))
+            if (Deleted || !from.CheckAlive() || !IsOwner(from))
                 return;
 
-            if (NewVendorSystem && this.HasPersonalVendors)
+            if (NewVendorSystem && HasPersonalVendors)
             {
                 from.SendLocalizedMessage(1062467); // You cannot trade this house while you still have personal vendors inside.
             }
-            else if (this.DecayLevel == DecayLevel.DemolitionPending)
+            else if (DecayLevel == DecayLevel.DemolitionPending)
             {
                 from.SendLocalizedMessage(1005321); // This house has been marked for demolition, and it cannot be transferred.
             }
@@ -1983,11 +2120,11 @@ namespace Server.Multis
             }
             else if (to.Player)
             {
-                if (BaseHouse.HasAccountHouse(to))
+                if (BaseHouse.AtAccountHouseLimit(to))
                 {
                     from.SendLocalizedMessage(501388); // You cannot transfer ownership to another house owner or co-owner!
                 }
-                else if (this.CheckTransferPosition(from, to))
+                else if (CheckTransferPosition(from, to))
                 {
                     NetState fromState = from.NetState, toState = to.NetState;
 
@@ -2029,6 +2166,13 @@ namespace Server.Multis
             if(IsOwner(m))
                 return true;
 
+            if(item is Container || item.Parent is Container)
+            {
+                Item check = item.Parent is BaseContainer ? (Item)item.Parent : item;
+
+                return m_Secures.FirstOrDefault(i => i.Item == check && HasSecureAccess(m, i)) != null;
+            }
+
             return LockDowns.ContainsKey(item) && IsSameAccount(m, LockDowns[item]);
         }
 
@@ -2051,65 +2195,70 @@ namespace Server.Multis
             return false;
         }
 
-        public void Release(Mobile m, Item item)
+        public bool Release(Mobile m, Item item)
         {
-            if (!this.IsCoOwner(m) || !this.IsActive)
-                return;
+            if (!IsFriend(m) || !IsActive)
+                return false;
 
-            if (this.IsLockedDown(item))
+            if (IsLockedDown(item))
             {
                 if (!CheckLockdownOwnership(m, item))
                 {
-                    m.SendLocalizedMessage(1010418); // You did not lock this down, and you are not able to release this.
+                    m.LocalOverheadMessage(MessageType.Regular, 0x3E9, 1010418); // You did not lock this down, and you are not able to release this.
                 }
-                else
+                else if (CanRelease(m, item))
                 {
-                    item.PublicOverheadMessage(Server.Network.MessageType.Label, 0x3B2, 501657);//[no longer locked down]
-                    this.SetLockdown(m, item, false);
+                    SetLockdown(m, item, false);
 
                     if (item is RewardBrazier)
                         ((RewardBrazier)item).TurnOff();
+
+                    return true;
                 }
+
+                return false;
             }
-            else if (this.IsSecure(item))
+            else if (IsSecure(item))
             {
-                this.ReleaseSecure(m, item);
+                return ReleaseSecure(m, item);
             }
             else
             {
                 m.LocalOverheadMessage(MessageType.Regular, 0x3E9, 1010416); // This is not locked down or secured.
             }
+
+            return false;
         }
 
         public void AddSecure(Mobile m, Item item)
         {
-            if (this.m_Secures == null || !this.IsOwner(m) || !this.IsActive)
+            if (m_Secures == null || !IsCoOwner(m) || !IsActive)
                 return;
 
-            if (!this.IsInside(item))
+            if (!IsInside(item))
             {
                 m.SendLocalizedMessage(1005525); // That is not in your house
             }
-            else if (this.IsLockedDown(item))
+            else if (IsLockedDown(item))
             {
                 m.SendLocalizedMessage(1010550); // This is already locked down and cannot be secured.
             }
-            else if (!(item is Container))
+            else if (!(item is Container) || item is BaseSpecialScrollBook)
             {
-                this.LockDown(m, item);
+                LockDown(m, item);
             }
             else
             {
                 SecureInfo info = null;
 
-                for (int i = 0; info == null && i < this.m_Secures.Count; ++i)
-                    if (((SecureInfo)this.m_Secures[i]).Item == item)
-                        info = (SecureInfo)this.m_Secures[i];
+                for (int i = 0; info == null && i < m_Secures.Count; ++i)
+                    if (((SecureInfo)m_Secures[i]).Item == item)
+                        info = (SecureInfo)m_Secures[i];
 
                 if (info != null)
                 {
                     m.CloseGump(typeof (SetSecureLevelGump));
-                    m.SendGump(new Gumps.SetSecureLevelGump(this.m_Owner, info, this));
+                    m.SendGump(new Gumps.SetSecureLevelGump(m_Owner, info, this));
                 }
                 else if (item.Parent != null)
                 {
@@ -2118,44 +2267,61 @@ namespace Server.Multis
                 // Mondain's Legacy mod
                 else if (!(item is BaseAddonContainer) && !item.Movable)
                 {
-                    m.SendLocalizedMessage(1010424); // You cannot secure this.
+                    m.SendLocalizedMessage(1010424); // You cannot secure 
                 }
-                else if (!this.IsAosRules && this.SecureCount >= this.MaxSecures)
+                else if (!IsAosRules && SecureCount >= MaxSecures)
                 {
                     // The maximum number of secure items has been reached :
-                    m.SendLocalizedMessage(1008142, true, this.MaxSecures.ToString());
+                    m.SendLocalizedMessage(1008142, true, MaxSecures.ToString());
                 }
-                else if (this.IsAosRules ? !this.CheckAosLockdowns(1) : ((this.LockDownCount + 125) >= this.MaxLockDowns))
+                else if (IsAosRules ? !CheckAosLockdowns(1) : ((LockDownCount + 125) >= MaxLockDowns))
                 {
                     m.SendLocalizedMessage(1005379); // That would exceed the maximum lock down limit for this house
                 }
-                else if (this.IsAosRules && !this.CheckAosStorage(item.TotalItems))
+                else if (IsAosRules && !CheckAosStorage(item.TotalItems))
                 {
                     m.SendLocalizedMessage(1061839); // This action would exceed the secure storage limit of the house.
                 }
                 else
                 {
-                    info = new SecureInfo((Container)item, SecureLevel.Owner);
+                    info = new SecureInfo((Container)item, SecureLevel.Owner, m);
 
                     item.IsLockedDown = false;
                     item.IsSecure = true;
 
-                    this.m_Secures.Add(info);
+                    m_Secures.Add(info);
 
                     if(m_LockDowns.ContainsKey(item))
                         m_LockDowns.Remove(item);
 
                     item.Movable = false;
 
+                    if (item is GardenShedAddon)
+                    {
+                        GardenShedBarrel ad = ((GardenShedAddon)item).SecondContainer as GardenShedBarrel;
+
+                        SecureInfo info2 = new SecureInfo((Container)ad, SecureLevel.Owner, m);
+
+                        ad.IsLockedDown = false;
+                        ad.IsSecure = true;
+
+                        m_Secures.Add(info2);
+
+                        if (m_LockDowns.ContainsKey(ad))
+                            m_LockDowns.Remove(ad);
+
+                        ad.Movable = false;
+                    }
+
                     m.CloseGump(typeof (SetSecureLevelGump));
-                    m.SendGump(new Gumps.SetSecureLevelGump(this.m_Owner, info, this));
+                    m.SendGump(new Gumps.SetSecureLevelGump(m_Owner, info, this));
                 }
             }
         }
 
         public virtual bool IsCombatRestricted(Mobile m)
         {
-            if (m == null || !m.Player || m.AccessLevel >= AccessLevel.GameMaster || !this.IsAosRules || (this.m_Owner != null && this.m_Owner.AccessLevel >= AccessLevel.GameMaster))
+            if (m == null || !m.Player || m.AccessLevel >= AccessLevel.GameMaster || !IsAosRules || (m_Owner != null && m_Owner.AccessLevel >= AccessLevel.GameMaster))
                 return false;
 
             for (int i = 0; i < m.Aggressed.Count; ++i)
@@ -2172,61 +2338,125 @@ namespace Server.Multis
             return false;
         }
 
+        public bool HasSecureAccess(Mobile m, SecureInfo info)
+        {
+            if (info.Owner == m)
+                return true;
+
+            return HasSecureAccess(m, info.Level);
+        }
+
         public bool HasSecureAccess(Mobile m, SecureLevel level)
         {
             if (m.AccessLevel >= AccessLevel.GameMaster)
                 return true;
 
-            if (this.IsCombatRestricted(m))
+            if (IsCombatRestricted(m))
                 return false;
 
-            switch ( level )
+            switch (level)
             {
                 case SecureLevel.Owner:
-                    return this.IsOwner(m);
+                    return IsOwner(m);
                 case SecureLevel.CoOwners:
-                    return this.IsCoOwner(m);
+                    return IsCoOwner(m);
                 case SecureLevel.Friends:
-                    return this.IsFriend(m);
+                    return IsFriend(m);
                 case SecureLevel.Anyone:
                     return true;
                 case SecureLevel.Guild:
-                    return this.IsGuildMember(m) | this.IsOwner(m);
-//Check
+                    return IsGuildMember(m) | IsOwner(m);
             }
 
             return false;
         }
 
-        public void ReleaseSecure(Mobile m, Item item)
+        public SecureLevel GetSecureAccess(Mobile m)
         {
-            if (this.m_Secures == null || !this.IsOwner(m) || item is StrongBox || !this.IsActive)
-                return;
+            if (IsOwner(m) || m.AccessLevel > AccessLevel.Player)
+                return SecureLevel.Owner;
 
-            for (int i = 0; i < this.m_Secures.Count; ++i)
+            if (IsCoOwner(m))
+                return SecureLevel.CoOwners;
+
+            if (IsFriend(m))
+                return SecureLevel.Friends;
+
+            if (IsGuildMember(m))
+                return SecureLevel.Guild;
+
+            return SecureLevel.Anyone;
+        }
+
+        public SecureInfo GetSecureInfoFor(Item item)
+        {
+            return m_Secures.FirstOrDefault(info => info.Item == item);
+        }
+
+        public SecureInfo GetSecureInfoFor(Mobile from, Item item)
+        {
+            return m_Secures.FirstOrDefault(info => info.Item == item && (info.Owner == from || IsOwner(from)));
+        }
+
+        public List<SecureInfo> GetSecureInfosFor(Mobile from)
+        {
+            return m_Secures.Where(s => s.Owner == from).ToList();
+        }
+
+        public bool ReleaseSecure(Mobile m, Item item)
+        {
+            if (m_Secures == null || !IsCoOwner(m) || item is StrongBox || !IsActive || !CanRelease(m, item))
+                return false;
+
+            var info = GetSecureInfoFor(item);
+
+            if (info != null)
             {
-                SecureInfo info = (SecureInfo)this.m_Secures[i];
-
-                if (info.Item == item && this.HasSecureAccess(m, info.Level))
+                if ((IsOwner(m) || info.Owner == m) && HasSecureAccess(m, info.Level))
                 {
                     item.IsLockedDown = false;
                     item.IsSecure = false;
 
-                    #region Mondain's Legacy
                     if (item is BaseAddonContainer)
                         item.Movable = false;
                     else
-                    #endregion
-
                         item.Movable = true;
+
                     item.SetLastMoved();
                     item.PublicOverheadMessage(Server.Network.MessageType.Label, 0x3B2, 501656);//[no longer secure]
-                    this.m_Secures.RemoveAt(i);
-                    return;
+
+                    m_Secures.Remove(info);
+
+                    return true;
+                }
+                else
+                {
+                    m.LocalOverheadMessage(MessageType.Regular, 0x3E9, 1010418); // You did not lock this down, and you are not able to release this.
+                }
+
+                return false;
+            }
+
+            m.SendLocalizedMessage(501717); //This isn't secure...
+
+            return false;
+        }
+
+        private bool CanRelease(Mobile from, Item item)
+        {
+            if (item is Container)
+            {
+                foreach (var i in item.Items)
+                {
+                    if (i is CraftableHouseItem || i is CraftableMetalHouseDoor || i is CraftableStoneHouseDoor)
+                    {
+                        from.SendLocalizedMessage(1010417); // You may not release this at this time.
+                        return false;
+                    }
                 }
             }
 
-            m.SendLocalizedMessage(501717);//This isn't secure...
+            return true;
         }
 
         public override bool Decays
@@ -2239,35 +2469,35 @@ namespace Server.Multis
 
         public void AddStrongBox(Mobile from)
         {
-            if (!this.IsCoOwner(from) || !this.IsActive)
+            if (!IsCoOwner(from) || !IsActive)
                 return;
 
-            if (from == this.Owner)
+            if (from == Owner)
             {
                 from.SendLocalizedMessage(502109); // Owners don't get a strong box
                 return;
             }
 
-            if (this.IsAosRules ? !this.CheckAosLockdowns(1) : ((this.LockDownCount + 1) > this.m_MaxLockDowns))
+            if (IsAosRules ? !CheckAosLockdowns(1) : ((LockDownCount + 1) > m_MaxLockDowns))
             {
                 from.SendLocalizedMessage(1005379);//That would exceed the maximum lock down limit for this house
                 return;
             }
 
-            foreach (SecureInfo info in this.m_Secures)
+            foreach (SecureInfo info in m_Secures)
             {
-                Container c = info.Item;
+                StrongBox c = info.Item as StrongBox;
 
-                if (!c.Deleted && c is StrongBox && ((StrongBox)c).Owner == from)
+                if (c != null && !c.Deleted && c.Owner == from)
                 {
                     from.SendLocalizedMessage(502112);//You already have a strong box
                     return;
                 }
             }
 
-            for (int i = 0; this.m_Doors != null && i < this.m_Doors.Count; ++i)
+            for (int i = 0; m_Doors != null && i < m_Doors.Count; ++i)
             {
-                BaseDoor door = this.m_Doors[i] as BaseDoor;
+                BaseDoor door = m_Doors[i] as BaseDoor;
                 Point3D p = door.Location;
 
                 if (door.Open)
@@ -2287,20 +2517,20 @@ namespace Server.Multis
             sb.Movable = false;
             sb.IsLockedDown = false;
             sb.IsSecure = true;
-            this.m_Secures.Add(new SecureInfo(sb, SecureLevel.CoOwners));
+            m_Secures.Add(new SecureInfo(sb, SecureLevel.CoOwners, from));
             sb.MoveToWorld(from.Location, from.Map);
         }
 
         public void Kick(Mobile from, Mobile targ)
         {
-            if (!this.IsFriend(from) || this.m_Friends == null)
+            if (!IsFriend(from) || m_Friends == null)
                 return;
 
             if (targ.IsStaff() && from.AccessLevel <= targ.AccessLevel)
             {
                 from.SendLocalizedMessage(501346); // Uh oh...a bigger boot may be required!
             }
-            else if (this.IsFriend(targ) && !Core.ML)
+            else if (IsFriend(targ) && !Core.ML)
             {
                 from.SendLocalizedMessage(501348); // You cannot eject a friend of the house!
             }
@@ -2308,7 +2538,7 @@ namespace Server.Multis
             {
                 from.SendLocalizedMessage(501351); // You cannot eject a vendor.
             }
-            else if (!this.IsInside(targ))
+            else if (!IsInside(targ))
             {
                 from.SendLocalizedMessage(501352); // You may not eject someone who is not in your house!
             }
@@ -2318,7 +2548,7 @@ namespace Server.Multis
             }
             else
             {
-                targ.MoveToWorld(this.BanLocation, this.Map);
+                targ.MoveToWorld(BanLocation, Map);
 
                 from.SendLocalizedMessage(1042840, targ.Name); // ~1_PLAYER NAME~ has been ejected from this house.
                 targ.SendLocalizedMessage(501341); /* You have been ejected from this house.
@@ -2329,16 +2559,16 @@ namespace Server.Multis
 
         public void RemoveAccess(Mobile from, Mobile targ)
         {
-            if (!this.IsFriend(from) || this.m_Access == null)
+            if (!IsFriend(from) || m_Access == null)
                 return;
 
-            if (this.m_Access.Contains(targ))
+            if (m_Access.Contains(targ))
             {
-                this.m_Access.Remove(targ);
+                m_Access.Remove(targ);
 
-                if (!this.HasAccess(targ) && this.IsInside(targ))
+                if (!HasAccess(targ) && IsInside(targ))
                 {
-                    targ.Location = this.BanLocation;
+                    targ.Location = BanLocation;
                     targ.SendLocalizedMessage(1060734); // Your access to this house has been revoked.
                 }
 
@@ -2348,12 +2578,12 @@ namespace Server.Multis
 
         public void RemoveBan(Mobile from, Mobile targ)
         {
-            if (!this.IsCoOwner(from) || this.m_Bans == null)
+            if (!IsCoOwner(from) || m_Bans == null)
                 return;
 
-            if (this.m_Bans.Contains(targ))
+            if (m_Bans.Contains(targ))
             {
-                this.m_Bans.Remove(targ);
+                m_Bans.Remove(targ);
 
                 from.SendLocalizedMessage(501297); // The ban is lifted.
             }
@@ -2361,14 +2591,14 @@ namespace Server.Multis
 
         public void Ban(Mobile from, Mobile targ)
         {
-            if (!this.IsFriend(from) || this.m_Bans == null)
+            if (!IsFriend(from) || m_Bans == null)
                 return;
 
             if (targ.IsStaff() && from.AccessLevel <= targ.AccessLevel)
             {
                 from.SendLocalizedMessage(501354); // Uh oh...a bigger boot may be required.
             }
-            else if (this.IsFriend(targ))
+            else if (IsFriend(targ))
             {
                 from.SendLocalizedMessage(501348); // You cannot eject a friend of the house!
             }
@@ -2376,19 +2606,19 @@ namespace Server.Multis
             {
                 from.SendLocalizedMessage(501351); // You cannot eject a vendor.
             }
-            else if (this.m_Bans.Count >= MaxBans)
+            else if (m_Bans.Count >= MaxBans)
             {
                 from.SendLocalizedMessage(501355); // The ban limit for this house has been reached!
             }
-            else if (this.IsBanned(targ))
+            else if (IsBanned(targ))
             {
                 from.SendLocalizedMessage(501356); // This person is already banned!
             }
-            else if (!this.IsInside(targ))
+            else if (!IsInside(targ))
             {
                 from.SendLocalizedMessage(501352); // You may not eject someone who is not in your house!
             }
-            else if (!this.Public && this.IsAosRules)
+            else if (!Public && IsAosRules)
             {
                 from.SendLocalizedMessage(1062521); // You cannot ban someone from a private house.  Revoke their access instead.
             }
@@ -2398,21 +2628,21 @@ namespace Server.Multis
             }
             else
             {
-                this.m_Bans.Add(targ);
+                m_Bans.Add(targ);
 
                 from.SendLocalizedMessage(1042839, targ.Name); // ~1_PLAYER_NAME~ has been banned from this house.
                 targ.SendLocalizedMessage(501340); // You have been banned from this house.
 
-                targ.MoveToWorld(this.BanLocation, this.Map);
+                targ.MoveToWorld(BanLocation, Map);
             }
         }
 
         public void GrantAccess(Mobile from, Mobile targ)
         {
-            if (!this.IsFriend(from) || this.m_Access == null)
+            if (!IsFriend(from) || m_Access == null)
                 return;
 
-            if (this.HasAccess(targ))
+            if (HasAccess(targ))
             {
                 from.SendLocalizedMessage(1060729); // That person already has access to this house.
             }
@@ -2420,13 +2650,13 @@ namespace Server.Multis
             {
                 from.SendLocalizedMessage(1060712); // That is not a player.
             }
-            else if (this.IsBanned(targ))
+            else if (IsBanned(targ))
             {
                 from.SendLocalizedMessage(501367); // This person is banned!  Unban them first.
             }
             else
             {
-                this.m_Access.Add(targ);
+                m_Access.Add(targ);
 
                 targ.SendLocalizedMessage(1060735); // You have been granted access to this house.
             }
@@ -2434,14 +2664,14 @@ namespace Server.Multis
 
         public void AddCoOwner(Mobile from, Mobile targ)
         {
-            if (!this.IsOwner(from) || this.m_CoOwners == null || this.m_Friends == null)
+            if (!IsOwner(from) || m_CoOwners == null || m_Friends == null)
                 return;
 
-            if (this.IsOwner(targ))
+            if (IsOwner(targ))
             {
                 from.SendLocalizedMessage(501360); // This person is already the house owner!
             }
-            else if (this.m_Friends.Contains(targ))
+            else if (m_Friends.Contains(targ))
             {
                 from.SendLocalizedMessage(501361); // This person is a friend of the house. Remove them first.
             }
@@ -2449,19 +2679,15 @@ namespace Server.Multis
             {
                 from.SendLocalizedMessage(501362); // That can't be a co-owner of the house.
             }
-            /*else if (HasAccountHouse(targ))
-            {
-                from.SendLocalizedMessage(501364); // That person is already a house owner.
-            }*/
-            else if (this.IsBanned(targ))
+            else if (IsBanned(targ))
             {
                 from.SendLocalizedMessage(501367); // This person is banned!  Unban them first.
             }
-            else if (this.m_CoOwners.Count >= MaxCoOwners)
+            else if (m_CoOwners.Count >= MaxCoOwners)
             {
                 from.SendLocalizedMessage(501368); // Your co-owner list is full!
             }
-            else if (this.m_CoOwners.Contains(targ))
+            else if (m_CoOwners.Contains(targ))
             {
                 from.SendLocalizedMessage(501369); // This person is already on your co-owner list!
             }
@@ -2506,29 +2732,42 @@ namespace Server.Multis
 
         public void RemoveCoOwner(Mobile from, Mobile targ)
         {
-            if (!this.IsOwner(from) || this.m_CoOwners == null)
+            RemoveCoOwner(from, targ, true);
+        }
+
+        public void RemoveCoOwner(Mobile from, Mobile targ, bool fromMessage)
+        {
+            if (!IsOwner(from) || m_CoOwners == null)
                 return;
 
-            if (this.m_CoOwners.Contains(targ))
+            if (m_CoOwners.Contains(targ))
             {
-                this.m_CoOwners.Remove(targ);
+                m_CoOwners.Remove(targ);
 
                 targ.Delta(MobileDelta.Noto);
 
-                from.SendLocalizedMessage(501299); // Co-owner removed from list.
+                if(fromMessage)
+                    from.SendLocalizedMessage(501299); // Co-owner removed from list.
+
                 targ.SendLocalizedMessage(501300); // You have been removed as a house co-owner.
 
-                foreach (SecureInfo info in this.m_Secures)
-                {
-                    Container c = info.Item;
+                var infos = GetSecureInfosFor(targ);
 
-                    if (c is StrongBox && ((StrongBox)c).Owner == targ)
+                foreach (var info in infos)
+                {
+                    if (info.Item is StrongBox)
                     {
+                        StrongBox c = info.Item as StrongBox;
+
                         c.IsLockedDown = false;
                         c.IsSecure = false;
-                        this.m_Secures.Remove(info);
                         c.Destroy();
-                        break;
+
+                        m_Secures.Remove(info);
+                    }
+                    else
+                    {
+                        info.Owner = from;
                     }
                 }
             }
@@ -2536,14 +2775,14 @@ namespace Server.Multis
 
         public void AddFriend(Mobile from, Mobile targ)
         {
-            if (!this.IsCoOwner(from) || this.m_Friends == null || this.m_CoOwners == null)
+            if (!IsCoOwner(from) || m_Friends == null || m_CoOwners == null)
                 return;
 
-            if (this.IsOwner(targ))
+            if (IsOwner(targ))
             {
                 from.SendLocalizedMessage(501370); // This person is already an owner of the house!
             }
-            else if (this.m_CoOwners.Contains(targ))
+            else if (m_CoOwners.Contains(targ))
             {
                 from.SendLocalizedMessage(501369); // This person is already on your co-owner list!
             }
@@ -2551,21 +2790,21 @@ namespace Server.Multis
             {
                 from.SendLocalizedMessage(501371); // That can't be a friend of the house.
             }
-            else if (this.IsBanned(targ))
+            else if (IsBanned(targ))
             {
                 from.SendLocalizedMessage(501374); // This person is banned!  Unban them first.
             }
-            else if (this.m_Friends.Count >= MaxFriends)
+            else if (m_Friends.Count >= MaxFriends)
             {
                 from.SendLocalizedMessage(501375); // Your friends list is full!
             }
-            else if (this.m_Friends.Contains(targ))
+            else if (m_Friends.Contains(targ))
             {
                 from.SendLocalizedMessage(501376); // This person is already on your friends list!
             }
             else
             {
-                this.m_Friends.Add(targ);
+                m_Friends.Add(targ);
 
                 targ.Delta(MobileDelta.Noto);
                 targ.SendLocalizedMessage(501337); // You have been made a friend of this house.
@@ -2574,17 +2813,31 @@ namespace Server.Multis
 
         public void RemoveFriend(Mobile from, Mobile targ)
         {
-            if (!this.IsCoOwner(from) || this.m_Friends == null)
+            RemoveFriend(from, targ, true);
+        }
+
+        public void RemoveFriend(Mobile from, Mobile targ, bool fromMessage)
+        {
+            if (!IsCoOwner(from) || m_Friends == null)
                 return;
 
-            if (this.m_Friends.Contains(targ))
+            if (m_Friends.Contains(targ))
             {
-                this.m_Friends.Remove(targ);
+                m_Friends.Remove(targ);
 
                 targ.Delta(MobileDelta.Noto);
 
-                from.SendLocalizedMessage(501298); // Friend removed from list.
+                if(fromMessage)
+                    from.SendLocalizedMessage(501298); // Friend removed from list.
+
                 targ.SendLocalizedMessage(1060751); // You are no longer a friend of this house.
+
+                var infos = GetSecureInfosFor(targ);
+
+                foreach (var info in infos)
+                {
+                    info.Owner = from;
+                }
             }
         }
 
@@ -2592,7 +2845,9 @@ namespace Server.Multis
         {
             base.Serialize(writer);
 
-            writer.Write((int)16); // version
+            writer.Write((int)21); // version
+
+            writer.WriteItemList(m_Carpets, true);
 
             if (!DynamicDecay.Enabled)
             {
@@ -2600,17 +2855,17 @@ namespace Server.Multis
             }
             else
             {
-                writer.Write((int)this.m_CurrentStage);
-                writer.Write(this.m_NextDecayStage);
+                writer.Write((int)m_CurrentStage);
+                writer.Write(m_NextDecayStage);
             }
 
-            writer.Write((Point3D)this.m_RelativeBanLocation);
+            writer.Write((Point3D)m_RelativeBanLocation);
 
-            writer.WriteItemList(this.m_VendorRentalContracts, true);
-            writer.WriteMobileList(this.m_InternalizedVendors, true);
+            writer.WriteItemList(m_VendorRentalContracts, true);
+            writer.WriteMobileList(m_InternalizedVendors, true);
 
-            writer.WriteEncodedInt(this.m_RelocatedEntities.Count);
-            foreach (RelocatedEntity relEntity in this.m_RelocatedEntities)
+            writer.WriteEncodedInt(m_RelocatedEntities.Count);
+            foreach (RelocatedEntity relEntity in m_RelocatedEntities)
             {
                 writer.Write(relEntity.Owner);
                 writer.Write((Point3D)relEntity.RelativeLocation);
@@ -2621,53 +2876,55 @@ namespace Server.Multis
                     writer.Write((int)relEntity.Entity.Serial);
             }
 
-            writer.WriteEncodedInt(this.m_VendorInventories.Count);
-            for (int i = 0; i < this.m_VendorInventories.Count; i++)
+            writer.WriteEncodedInt(m_VendorInventories.Count);
+            for (int i = 0; i < m_VendorInventories.Count; i++)
             {
-                VendorInventory inventory = (VendorInventory)this.m_VendorInventories[i];
+                VendorInventory inventory = m_VendorInventories[i];
                 inventory.Serialize(writer);
             }
 
-            writer.Write((DateTime)this.m_LastRefreshed);
-            writer.Write((bool)this.m_RestrictDecay);
+            writer.Write((DateTime)m_LastRefreshed);
+            writer.Write((bool)m_RestrictDecay);
 
-            writer.Write((int)this.m_Visits);
-
-            writer.Write((int)this.m_Price);
-
-            writer.WriteMobileList(this.m_Access);
-
-            writer.Write(this.m_BuiltOn);
-            writer.Write(this.m_LastTraded);
-
-            writer.WriteItemList(this.m_Addons, true);
-
-            writer.Write(this.m_Secures.Count);
-
-            for (int i = 0; i < this.m_Secures.Count; ++i)
-                ((SecureInfo)this.m_Secures[i]).Serialize(writer);
-
-            writer.Write(this.m_Public);
-
-            //writer.Write( BanLocation );
-
-            writer.Write(this.m_Owner);
-
-            // Version 5 no longer serializes region coords
-            /*writer.Write( (int)m_Region.Coords.Count );
-            foreach( Rectangle2D rect in m_Region.Coords )
+            writer.Write(m_Visits.Count);
+            foreach (var kvp in m_Visits)
             {
-            writer.Write( rect );
-            }*/
+                writer.Write(kvp.Key);
+                writer.Write(kvp.Value);
+            }
 
-            writer.WriteMobileList(this.m_CoOwners, true);
-            writer.WriteMobileList(this.m_Friends, true);
-            writer.WriteMobileList(this.m_Bans, true);
+            writer.Write((int)m_Price);
 
-            writer.Write(this.m_Sign);
-            writer.Write(this.m_Trash);
+            writer.WriteMobileList(m_Access);
 
-            writer.WriteItemList(this.m_Doors, true);
+            writer.Write(m_BuiltOn);
+            writer.Write(m_LastTraded);
+
+            //writer.WriteItemList(m_Addons, true);
+            writer.Write(m_Addons.Count);
+            foreach (var kvp in m_Addons)
+            {
+                writer.Write(kvp.Key);
+                writer.Write(kvp.Value);
+            }
+
+            writer.Write(m_Secures.Count);
+
+            for (int i = 0; i < m_Secures.Count; ++i)
+                ((SecureInfo)m_Secures[i]).Serialize(writer);
+
+            writer.Write(m_Public);
+
+            writer.Write(m_Owner);
+
+            writer.WriteMobileList(m_CoOwners, true);
+            writer.WriteMobileList(m_Friends, true);
+            writer.WriteMobileList(m_Bans, true);
+
+            writer.Write(m_Sign);
+            writer.Write(m_Trash);
+
+            writer.WriteItemList(m_Doors, true);
 
             writer.Write(m_LockDowns.Count);
             ColUtility.ForEach(m_LockDowns, (key, value) =>
@@ -2676,15 +2933,15 @@ namespace Server.Multis
                     writer.Write(value);
                 });
 
-            writer.Write((int)this.m_MaxLockDowns);
-            writer.Write((int)this.m_MaxSecures);
+            writer.Write((int)m_MaxLockDowns);
+            writer.Write((int)m_MaxSecures);
 
             // Items in locked down containers that aren't locked down themselves must decay!
             foreach(KeyValuePair<Item, Mobile> kvp in m_LockDowns)
             {
                 Item item = kvp.Key;
 
-                if (item is Container && !(item is BaseBoard || item is Aquarium || item is FishBowl))
+                if (item is Container && CheckContentsDecay(item))
                 {
                     Container cont = (Container)item;
                     List<Item> children = cont.Items;
@@ -2708,8 +2965,24 @@ namespace Server.Multis
             int count;
             bool loadedDynamicDecay = false;
 
+            m_Visits = new Dictionary<Mobile, DateTime>();
+
+            if (version < 21)
+            {
+                SecureInfo.VersionInsertion = true;
+            }
+
             switch (version)
             {
+                case 21: // version 21, version insertion for secureinfo
+                case 20: // version 20, Addons resulted in version 18 bug added to dictionary
+                case 19: // version 19, Visit change to dictionary
+                case 18: // version 18, converted addons list to dictionary
+                case 17:
+                    {
+                        m_Carpets = reader.ReadStrongItemList();
+                        goto case 16;
+                    }
                 case 16: // version 16, converted lockdown list to dictionary
                 case 15:
                     {
@@ -2717,8 +2990,8 @@ namespace Server.Multis
 
                         if (stage != -1)
                         {
-                            this.m_CurrentStage = (DecayLevel)stage;
-                            this.m_NextDecayStage = reader.ReadDateTime();
+                            m_CurrentStage = (DecayLevel)stage;
+                            m_NextDecayStage = reader.ReadDateTime();
                             loadedDynamicDecay = true;
                         }
 
@@ -2726,14 +2999,14 @@ namespace Server.Multis
                     }
                 case 14:
                     {
-                        this.m_RelativeBanLocation = reader.ReadPoint3D();
+                        m_RelativeBanLocation = reader.ReadPoint3D();
                         goto case 13;
                     }
                 case 13: // removed ban location serialization
                 case 12:
                     {
-                        this.m_VendorRentalContracts = reader.ReadItemList();
-                        this.m_InternalizedVendors = reader.ReadMobileList();
+                        m_VendorRentalContracts = reader.ReadStrongItemList();
+                        m_InternalizedVendors = reader.ReadStrongMobileList();
 
                         int relocatedCount = reader.ReadEncodedInt();
                         for (int i = 0; i < relocatedCount; i++)
@@ -2749,56 +3022,94 @@ namespace Server.Multis
                             IEntity entity = World.FindEntity(reader.ReadInt());
 
                             if (entity != null)
-                                this.m_RelocatedEntities.Add(new RelocatedEntity(entity, relLocation, m));
+                                m_RelocatedEntities.Add(new RelocatedEntity(entity, relLocation, m));
                         }
 
                         int inventoryCount = reader.ReadEncodedInt();
                         for (int i = 0; i < inventoryCount; i++)
                         {
                             VendorInventory inventory = new VendorInventory(this, reader);
-                            this.m_VendorInventories.Add(inventory);
+                            m_VendorInventories.Add(inventory);
                         }
 
                         goto case 11;
                     }
                 case 11:
                     {
-                        this.m_LastRefreshed = reader.ReadDateTime();
-                        this.m_RestrictDecay = reader.ReadBool();
+                        m_LastRefreshed = reader.ReadDateTime();
+                        m_RestrictDecay = reader.ReadBool();
                         goto case 10;
                     }
                 case 10: // just a signal for updates
                 case 9:
                     {
-                        this.m_Visits = reader.ReadInt();
+                        if (version <= 18)
+                        {
+                            reader.ReadInt();
+                        }
+                        else
+                        {
+                            int c = reader.ReadInt();
+                            for (int i = 0; i < c; i++)
+                            {
+                                Mobile visitor = reader.ReadMobile();
+                                DateTime lastVisit = reader.ReadDateTime();
+
+                                if (visitor != null)
+                                    m_Visits[visitor] = lastVisit;
+                            }
+                        }
                         goto case 8;
                     }
                 case 8:
                     {
-                        this.m_Price = reader.ReadInt();
+                        m_Price = reader.ReadInt();
                         goto case 7;
                     }
                 case 7:
                     {
-                        this.m_Access = reader.ReadMobileList();
+                        m_Access = reader.ReadStrongMobileList();
                         goto case 6;
                     }
                 case 6:
                     {
-                        this.m_BuiltOn = reader.ReadDateTime();
-                        this.m_LastTraded = reader.ReadDateTime();
+                        m_BuiltOn = reader.ReadDateTime();
+                        m_LastTraded = reader.ReadDateTime();
                         goto case 5;
                     }
                 case 5: // just removed fields
                 case 4:
                     {
-                        this.m_Addons = reader.ReadItemList();
+                        m_Addons = new Dictionary<Item, Mobile>();
+
+                        if (version < 18)
+                        {
+                            var list = reader.ReadStrongItemList();
+                            foreach (var item in list)
+                            {
+                                m_Addons[item] = Owner;
+                            }
+                        }
+                        else
+                        {
+                            int c = reader.ReadInt();
+                            for (int i = 0; i < c; i++)
+                            {
+                                var item = reader.ReadItem();
+                                var mob = reader.ReadMobile();
+
+                                if (item != null)
+                                {
+                                    m_Addons[item] = mob != null ? mob : Owner;
+                                }
+                            }
+                        }
                         goto case 3;
                     }
                 case 3:
                     {
                         count = reader.ReadInt();
-                        this.m_Secures = new ArrayList(count);
+                        m_Secures = new List<SecureInfo>(count);
 
                         for (int i = 0; i < count; ++i)
                         {
@@ -2806,8 +3117,8 @@ namespace Server.Multis
 
                             if (info.Item != null)
                             {
-                                info.Item.IsSecure = true;
-                                this.m_Secures.Add(info);
+                                info.Item.IsSecure = info.IsLockdown ? false : true;
+                                m_Secures.Add(info);
                             }
                         }
 
@@ -2815,7 +3126,7 @@ namespace Server.Multis
                     }
                 case 2:
                     {
-                        this.m_Public = reader.ReadBool();
+                        m_Public = reader.ReadBool();
                         goto case 1;
                     }
                 case 1:
@@ -2826,25 +3137,28 @@ namespace Server.Multis
                     }
                 case 0:
                     {
+                        if (version < 17)
+                            m_Carpets = new List<Item>();
+
                         if (version < 14)
-                            this.m_RelativeBanLocation = this.BaseBanLocation;
+                            m_RelativeBanLocation = BaseBanLocation;
 
                         if (version < 12)
                         {
-                            this.m_VendorRentalContracts = new ArrayList();
-                            this.m_InternalizedVendors = new ArrayList();
+                            m_VendorRentalContracts = new List<Item>();
+                            m_InternalizedVendors = new List<Mobile>();
                         }
 
                         if (version < 4)
-                            this.m_Addons = new ArrayList();
+                            m_Addons = new Dictionary<Item, Mobile>();
 
                         if (version < 7)
-                            this.m_Access = new ArrayList();
+                            m_Access = new List<Mobile>();
 
                         if (version < 8)
-                            this.m_Price = this.DefaultPrice;
+                            m_Price = DefaultPrice;
 
-                        this.m_Owner = reader.ReadMobile();
+                        m_Owner = reader.ReadMobile();
 
                         if (version < 5)
                         {
@@ -2854,22 +3168,22 @@ namespace Server.Multis
                                 reader.ReadRect2D();
                         }
 
-                        this.UpdateRegion();
+                        UpdateRegion();
 
-                        this.m_CoOwners = reader.ReadMobileList();
-                        this.m_Friends = reader.ReadMobileList();
-                        this.m_Bans = reader.ReadMobileList();
+                        m_CoOwners = reader.ReadStrongMobileList();
+                        m_Friends = reader.ReadStrongMobileList();
+                        m_Bans = reader.ReadStrongMobileList();
 
-                        this.m_Sign = reader.ReadItem() as HouseSign;
-                        this.m_Trash = reader.ReadItem() as TrashBarrel;
+                        m_Sign = reader.ReadItem() as HouseSign;
+                        m_Trash = reader.ReadItem() as TrashBarrel;
 
-                        this.m_Doors = reader.ReadItemList();
+                        m_Doors = reader.ReadStrongItemList();
 
                         m_LockDowns = new Dictionary<Item, Mobile>();
 
                         if (version < 16)
                         {
-                            ArrayList list = reader.ReadItemList();
+                            List<Item> list = reader.ReadStrongItemList();
 
                             foreach (Item item in list)
                             {
@@ -2893,13 +3207,13 @@ namespace Server.Multis
                             }
                         }
 
-                        for (int i = 0; i < this.m_VendorRentalContracts.Count; ++i)
-                            ((Item)this.m_VendorRentalContracts[i]).IsLockedDown = true;
+                        for (int i = 0; i < m_VendorRentalContracts.Count; ++i)
+                            ((Item)m_VendorRentalContracts[i]).IsLockedDown = true;
 
                         if (version < 3)
                         {
-                            ArrayList items = reader.ReadItemList();
-                            this.m_Secures = new ArrayList(items.Count);
+                            List<Item> items = reader.ReadStrongItemList();
+                            m_Secures = new List<SecureInfo>(items.Count);
 
                             for (int i = 0; i < items.Count; ++i)
                             {
@@ -2908,24 +3222,24 @@ namespace Server.Multis
                                 if (c != null)
                                 {
                                     c.IsSecure = true;
-                                    this.m_Secures.Add(new SecureInfo(c, SecureLevel.CoOwners));
+                                    m_Secures.Add(new SecureInfo(c, SecureLevel.CoOwners, Owner));
                                 }
                             }
                         }
 
-                        this.m_MaxLockDowns = reader.ReadInt();
-                        this.m_MaxSecures = reader.ReadInt();
+                        m_MaxLockDowns = reader.ReadInt();
+                        m_MaxSecures = reader.ReadInt();
 
-                        if ((this.Map == null || this.Map == Map.Internal) && this.Location == Point3D.Zero)
-                            this.Delete();
+                        if ((Map == null || Map == Map.Internal) && Location == Point3D.Zero)
+                            Delete();
 
-                        if (this.m_Owner != null)
+                        if (m_Owner != null)
                         {
                             List<BaseHouse> list = null;
-                            m_Table.TryGetValue(this.m_Owner, out list);
+                            m_Table.TryGetValue(m_Owner, out list);
 
                             if (list == null)
-                                m_Table[this.m_Owner] = list = new List<BaseHouse>();
+                                m_Table[m_Owner] = list = new List<BaseHouse>();
 
                             list.Add(this);
                         }
@@ -2934,7 +3248,7 @@ namespace Server.Multis
             }
 
             if (version <= 1)
-                this.ChangeSignType(0xBD2);//private house, plain brass sign
+                ChangeSignType(0xBD2);//private house, plain brass sign
 
             if (version < 10)
             {
@@ -2946,25 +3260,49 @@ namespace Server.Multis
             }
 
             if (version < 11)
-                this.m_LastRefreshed = DateTime.UtcNow + TimeSpan.FromHours(24 * Utility.RandomDouble());
+                m_LastRefreshed = DateTime.UtcNow + TimeSpan.FromHours(24 * Utility.RandomDouble());
 
             if (DynamicDecay.Enabled && !loadedDynamicDecay)
             {
-                DecayLevel old = this.GetOldDecayLevel();
+                DecayLevel old = GetOldDecayLevel();
 
                 if (old == DecayLevel.DemolitionPending)
                     old = DecayLevel.Collapsed;
 
-                this.SetDynamicDecay(old);
+                SetDynamicDecay(old);
             }
 
-            if (!this.CheckDecay())
+            if (!CheckDecay())
             {
-                if (this.RelocatedEntities.Count > 0)
+                if (RelocatedEntities.Count > 0)
                     Timer.DelayCall(TimeSpan.Zero, new TimerCallback(RestoreRelocatedEntities));
 
-                if (this.m_Owner == null && this.m_Friends.Count == 0 && this.m_CoOwners.Count == 0)
+                if (m_Owner == null && m_Friends.Count == 0 && m_CoOwners.Count == 0)
                     Timer.DelayCall(TimeSpan.FromSeconds(10.0), new TimerCallback(Delete));
+            }
+
+            if (version == 19)
+            {
+                Timer.DelayCall(CheckUnregisteredAddons);
+            }
+        }
+
+        private void CheckUnregisteredAddons()
+        {
+            if (Region == null || m_Addons == null)
+                return;
+
+            foreach (var item in Region.GetEnumeratedItems().Where(i => i is IAddon))
+            {
+                if(m_Addons.ContainsKey(item))
+                    continue;
+
+                m_Addons[item] = Owner;
+            }
+
+            foreach (var item in Region.GetEnumeratedItems().Where(i => i is AddonComponent && ((AddonComponent)i).Addon == null))
+            {
+                item.Delete();
             }
         }
 
@@ -2979,7 +3317,7 @@ namespace Server.Multis
             }
 
             foreach (KeyValuePair<Item, Mobile> kvp in lockDowns)
-                this.SetLockdown(kvp.Value, kvp.Key, true, true);
+                SetLockdown(kvp.Value, kvp.Key, true);
         }
 
         public static void HandleDeletion(Mobile mob)
@@ -3006,24 +3344,14 @@ namespace Server.Multis
 
                 if (trans == null)
                     canClaim = (house.CoOwners.Count > 0);
-                /*{
-                for ( int j = 0; j < house.CoOwners.Count; ++j )
-                {
-                Mobile check = house.CoOwners[j] as Mobile;
-
-                if ( check != null && !check.Deleted && !HasAccountHouse( check ) )
-                {
-                canClaim = true;
-                break;
-                }
-                }
-                }*/
 
                 if (trans == null && !canClaim)
                     Timer.DelayCall(TimeSpan.Zero, new TimerCallback(house.Delete));
                 else
                     house.Owner = trans;
             }
+
+            ColUtility.Free(houses);
         }
 
         [CommandProperty(AccessLevel.GameMaster)]
@@ -3031,52 +3359,58 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_Owner;
+                return m_Owner;
             }
             set
             {
-                if (this.m_Owner != null)
+                if (m_Owner != null)
                 {
                     List<BaseHouse> list = null;
-                    m_Table.TryGetValue(this.m_Owner, out list);
+                    m_Table.TryGetValue(m_Owner, out list);
 
                     if (list == null)
-                        m_Table[this.m_Owner] = list = new List<BaseHouse>();
+                        m_Table[m_Owner] = list = new List<BaseHouse>();
 
                     list.Remove(this);
-                    this.m_Owner.Delta(MobileDelta.Noto);
+                    m_Owner.Delta(MobileDelta.Noto);
                 }
 
-                this.m_Owner = value;
+                m_Owner = value;
 
-                if (this.m_Owner != null)
+                if (m_Owner != null)
                 {
                     List<BaseHouse> list = null;
-                    m_Table.TryGetValue(this.m_Owner, out list);
+                    m_Table.TryGetValue(m_Owner, out list);
 
                     if (list == null)
-                        m_Table[this.m_Owner] = list = new List<BaseHouse>();
+                        m_Table[m_Owner] = list = new List<BaseHouse>();
 
                     list.Add(this);
-                    this.m_Owner.Delta(MobileDelta.Noto);
+                    m_Owner.Delta(MobileDelta.Noto);
                 }
 
-                if (this.m_Sign != null)
-                    this.m_Sign.InvalidateProperties();
+                if (m_Sign != null)
+                    m_Sign.InvalidateProperties();
             }
         }
 
         [CommandProperty(AccessLevel.GameMaster)]
-        public int Visits
+        public Dictionary<Mobile, DateTime> Visits
         {
             get
             {
-                return this.m_Visits;
+                return m_Visits;
             }
             set
             {
-                this.m_Visits = value;
+                m_Visits = value;
             }
+        }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public int TotalVisits
+        { 
+            get { return m_Visits.Count; } 
         }
 
         [CommandProperty(AccessLevel.GameMaster)]
@@ -3084,19 +3418,19 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_Public;
+                return m_Public;
             }
             set
             {
-                if (this.m_Public != value)
+                if (m_Public != value)
                 {
-                    this.m_Public = value;
+                    m_Public = value;
 
-                    if (!this.m_Public) // Privatizing the house, change to brass sign
-                        this.ChangeSignType(0xBD2);
+                    if (!m_Public) // Privatizing the house, change to brass sign
+                        ChangeSignType(0xBD2);
 
-                    if (this.m_Sign != null)
-                        this.m_Sign.InvalidateProperties();
+                    if (m_Sign != null)
+                        m_Sign.InvalidateProperties();
                 }
             }
         }
@@ -3106,11 +3440,11 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_MaxSecures;
+                return m_MaxSecures;
             }
             set
             {
-                this.m_MaxSecures = value;
+                m_MaxSecures = value;
             }
         }
 
@@ -3119,15 +3453,15 @@ namespace Server.Multis
         {
             get
             {
-                if (this.m_Region != null)
-                    return this.m_Region.GoLocation;
+                if (m_Region != null)
+                    return m_Region.GoLocation;
 
-                Point3D rel = this.m_RelativeBanLocation;
-                return new Point3D(this.X + rel.X, this.Y + rel.Y, this.Z + rel.Z);
+                Point3D rel = m_RelativeBanLocation;
+                return new Point3D(X + rel.X, Y + rel.Y, Z + rel.Z);
             }
             set
             {
-                this.RelativeBanLocation = new Point3D(value.X - this.X, value.Y - this.Y, value.Z - this.Z);
+                RelativeBanLocation = new Point3D(value.X - X, value.Y - Y, value.Z - Z);
             }
         }
 
@@ -3136,14 +3470,14 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_RelativeBanLocation;
+                return m_RelativeBanLocation;
             }
             set
             {
-                this.m_RelativeBanLocation = value;
+                m_RelativeBanLocation = value;
 
-                if (this.m_Region != null)
-                    this.m_Region.GoLocation = new Point3D(this.X + value.X, this.Y + value.Y, this.Z + value.Z);
+                if (m_Region != null)
+                    m_Region.GoLocation = new Point3D(X + value.X, Y + value.Y, Z + value.Z);
             }
         }
 
@@ -3152,11 +3486,11 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_MaxLockDowns;
+                return m_MaxLockDowns;
             }
             set
             {
-                this.m_MaxLockDowns = value;
+                m_MaxLockDowns = value;
             }
         }
 
@@ -3164,62 +3498,62 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_Region;
+                return m_Region;
             }
         }
-        public ArrayList CoOwners
+        public List<Mobile> CoOwners
         {
             get
             {
-                return this.m_CoOwners;
+                return m_CoOwners;
             }
             set
             {
-                this.m_CoOwners = value;
+                m_CoOwners = value;
             }
         }
-        public ArrayList Friends
+        public List<Mobile> Friends
         {
             get
             {
-                return this.m_Friends;
+                return m_Friends;
             }
             set
             {
-                this.m_Friends = value;
+                m_Friends = value;
             }
         }
-        public ArrayList Access
+        public List<Mobile> Access
         {
             get
             {
-                return this.m_Access;
+                return m_Access;
             }
             set
             {
-                this.m_Access = value;
+                m_Access = value;
             }
         }
-        public ArrayList Bans
+        public List<Mobile> Bans
         {
             get
             {
-                return this.m_Bans;
+                return m_Bans;
             }
             set
             {
-                this.m_Bans = value;
+                m_Bans = value;
             }
         }
-        public ArrayList Doors
+        public List<Item> Doors
         {
             get
             {
-                return this.m_Doors;
+                return m_Doors;
             }
             set
             {
-                this.m_Doors = value;
+                m_Doors = value;
             }
         }
 
@@ -3227,14 +3561,11 @@ namespace Server.Multis
         {
             int count = 0;
 
-            if (this.m_LockDowns != null)
+            if (m_LockDowns != null)
             {
                 foreach(KeyValuePair<Item, Mobile> kvp in m_LockDowns)
                 {
                     Item item = kvp.Key;
-
-                    if (item is Server.Engines.Plants.Seed && item.Parent is Server.Engines.Plants.SeedBox)
-                        continue;
 
                     if (!(item is Container))
                         count += item.TotalItems;
@@ -3252,13 +3583,13 @@ namespace Server.Multis
             {
                 int count = 0;
 
-                count += this.GetLockdowns();
+                count += GetLockdowns();
 
-                if (this.m_Secures != null)
+                if (m_Secures != null)
                 {
-                    for (int i = 0; i < this.m_Secures.Count; ++i)
+                    for (int i = 0; i < m_Secures.Count; ++i)
                     {
-                        SecureInfo info = (SecureInfo)this.m_Secures[i];
+                        SecureInfo info = m_Secures[i];
 
                         if (info.Item.Deleted)
                             continue;
@@ -3279,11 +3610,11 @@ namespace Server.Multis
             {
                 int count = 0;
 
-                if (this.m_Secures != null)
+                if (m_Secures != null)
                 {
-                    for (int i = 0; i < this.m_Secures.Count; i++)
+                    for (int i = 0; i < m_Secures.Count; i++)
                     {
-                        SecureInfo info = (SecureInfo)this.m_Secures[i];
+                        SecureInfo info = m_Secures[i];
 
                         if (info.Item.Deleted)
                             continue;
@@ -3296,93 +3627,97 @@ namespace Server.Multis
             }
         }
 
-        public ArrayList Addons
+        public List<Item> Carpets { get { return m_Carpets; } set { m_Carpets = value; } }
+
+        public Dictionary<Item, Mobile> Addons
         {
             get
             {
-                return this.m_Addons;
+                return m_Addons;
             }
             set
             {
-                this.m_Addons = value;
+                m_Addons = value;
             }
         }
+
         public Dictionary<Item, Mobile> LockDowns
         {
             get
             {
-                return this.m_LockDowns;
+                return m_LockDowns;
             }
         }
-        public ArrayList Secures
+
+        public List<SecureInfo> Secures
         {
             get
             {
-                return this.m_Secures;
+                return m_Secures;
             }
         }
         public HouseSign Sign
         {
             get
             {
-                return this.m_Sign;
+                return m_Sign;
             }
             set
             {
-                this.m_Sign = value;
+                m_Sign = value;
             }
         }
-        public ArrayList PlayerVendors
+        public List<Mobile> PlayerVendors
         {
             get
             {
-                return this.m_PlayerVendors;
+                return m_PlayerVendors;
             }
         }
-        public ArrayList PlayerBarkeepers
+        public List<Mobile> PlayerBarkeepers
         {
             get
             {
-                return this.m_PlayerBarkeepers;
+                return m_PlayerBarkeepers;
             }
         }
-        public ArrayList VendorRentalContracts
+        public List<Item> VendorRentalContracts
         {
             get
             {
-                return this.m_VendorRentalContracts;
+                return m_VendorRentalContracts;
             }
         }
-        public ArrayList VendorInventories
+        public List<VendorInventory> VendorInventories
         {
             get
             {
-                return this.m_VendorInventories;
+                return m_VendorInventories;
             }
         }
-        public ArrayList RelocatedEntities
+        public List<RelocatedEntity> RelocatedEntities
         {
             get
             {
-                return this.m_RelocatedEntities;
+                return m_RelocatedEntities;
             }
         }
         public MovingCrate MovingCrate
         {
             get
             {
-                return this.m_MovingCrate;
+                return m_MovingCrate;
             }
             set
             {
-                this.m_MovingCrate = value;
+                m_MovingCrate = value;
             }
         }
-        public ArrayList InternalizedVendors
+        public List<Mobile> InternalizedVendors
         {
             get
             {
-                return this.m_InternalizedVendors;
+                return m_InternalizedVendors;
             }
         }
 
@@ -3390,11 +3725,11 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_BuiltOn;
+                return m_BuiltOn;
             }
             set
             {
-                this.m_BuiltOn = value;
+                m_BuiltOn = value;
             }
         }
 
@@ -3402,17 +3737,17 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_LastTraded;
+                return m_LastTraded;
             }
             set
             {
-                this.m_LastTraded = value;
+                m_LastTraded = value;
             }
         }
 
         public override void OnDelete()
         {
-            this.RestoreRelocatedEntities();
+            RestoreRelocatedEntities();
 
             new FixColumnTimer(this).Start();
 
@@ -3433,24 +3768,42 @@ namespace Server.Multis
             public FixColumnTimer(BaseMulti multi)
                 : base(TimeSpan.Zero)
             {
-                this.m_Map = multi.Map;
+                m_Map = multi.Map;
 
                 MultiComponentList mcl = multi.Components;
 
-                this.m_StartX = multi.X + mcl.Min.X;
-                this.m_StartY = multi.Y + mcl.Min.Y;
-                this.m_EndX = multi.X + mcl.Max.X;
-                this.m_EndY = multi.Y + mcl.Max.Y;
+                m_StartX = multi.X + mcl.Min.X;
+                m_StartY = multi.Y + mcl.Min.Y;
+                m_EndX = multi.X + mcl.Max.X;
+                m_EndY = multi.Y + mcl.Max.Y;
             }
 
             protected override void OnTick()
             {
-                if (this.m_Map == null)
+                if (m_Map == null)
                     return;
 
-                for (int x = this.m_StartX; x <= this.m_EndX; ++x)
-                    for (int y = this.m_StartY; y <= this.m_EndY; ++y)
-                        this.m_Map.FixColumn(x, y);
+                for (int x = m_StartX; x <= m_EndX; ++x)
+                    for (int y = m_StartY; y <= m_EndY; ++y)
+                        m_Map.FixColumn(x, y);
+            }
+        }
+
+        public DateTime LastVisit(Mobile m)
+        {
+            if (m_Visits.ContainsKey(m))
+            {
+                return m_Visits[m];
+            }
+
+            return DateTime.MinValue;
+        }
+
+        public void AddVisit(Mobile m)
+        {
+            if (m is PlayerMobile && !IsOwner(m))
+            {
+                m_Visits[m] = DateTime.Now;
             }
         }
 
@@ -3458,43 +3811,45 @@ namespace Server.Multis
         {
             base.OnAfterDelete();
 
-            if (this.m_Owner != null)
+            if (m_Owner != null)
             {
                 List<BaseHouse> list = null;
-                m_Table.TryGetValue(this.m_Owner, out list);
+                m_Table.TryGetValue(m_Owner, out list);
 
                 if (list == null)
-                    m_Table[this.m_Owner] = list = new List<BaseHouse>();
+                    m_Table[m_Owner] = list = new List<BaseHouse>();
 
                 list.Remove(this);
             }
 
-            if (this.m_Region != null)
+            CheckUnregisteredAddons();
+
+            if (m_Region != null)
             {
-                this.m_Region.Unregister();
-                this.m_Region = null;
+                m_Region.Unregister();
+                m_Region = null;
             }
 
-            if (this.m_Sign != null)
-                this.m_Sign.Delete();
+            if (m_Sign != null)
+                m_Sign.Delete();
 
-            if (this.m_Trash != null)
-                this.m_Trash.Delete();
+            if (m_Trash != null)
+                m_Trash.Delete();
 
-            if (this.m_Doors != null)
+            if (m_Doors != null)
             {
-                for (int i = 0; i < this.m_Doors.Count; ++i)
+                for (int i = 0; i < m_Doors.Count; ++i)
                 {
-                    Item item = (Item)this.m_Doors[i];
+                    Item item = (Item)m_Doors[i];
 
                     if (item != null)
                         item.Delete();
                 }
 
-                this.m_Doors.Clear();
+                m_Doors.Clear();
             }
 
-            if (this.m_LockDowns != null)
+            if (m_LockDowns != null)
             {
                 foreach(KeyValuePair<Item, Mobile> kvp in m_LockDowns)
                 {
@@ -3506,17 +3861,19 @@ namespace Server.Multis
                         item.IsSecure = false;
                         item.Movable = true;
                         item.SetLastMoved();
+
+                        item.SendLocalizedMessage(501657, ""); // [no longer locked down]
                     }
                 }
 
-                this.m_LockDowns.Clear();
+                m_LockDowns.Clear();
             }
 
-            if (this.VendorRentalContracts != null)
+            if (VendorRentalContracts != null)
             {
-                for (int i = 0; i < this.VendorRentalContracts.Count; ++i)
+                for (int i = 0; i < VendorRentalContracts.Count; ++i)
                 {
-                    Item item = (Item)this.VendorRentalContracts[i];
+                    Item item = (Item)VendorRentalContracts[i];
 
                     if (item != null)
                     {
@@ -3524,21 +3881,23 @@ namespace Server.Multis
                         item.IsSecure = false;
                         item.Movable = true;
                         item.SetLastMoved();
+
+                        item.SendLocalizedMessage(501657, ""); // [no longer locked down]
                     }
                 }
 
-                this.VendorRentalContracts.Clear();
+                VendorRentalContracts.Clear();
             }
 
-            if (this.m_Secures != null)
+            if (m_Secures != null)
             {
-                for (int i = 0; i < this.m_Secures.Count; ++i)
+                for (int i = 0; i < m_Secures.Count; ++i)
                 {
-                    SecureInfo info = (SecureInfo)this.m_Secures[i];
+                    SecureInfo info = m_Secures[i];
 
                     if (info.Item is StrongBox)
                     {
-                        info.Item.Destroy();
+                        ((StrongBox)info.Item).Destroy();
                     }
                     else
                     {
@@ -3546,17 +3905,19 @@ namespace Server.Multis
                         info.Item.IsSecure = false;
                         info.Item.Movable = true;
                         info.Item.SetLastMoved();
+
+                        info.Item.SendLocalizedMessage(501718, ""); // no longer secure!
                     }
                 }
 
-                this.m_Secures.Clear();
+                m_Secures.Clear();
             }
 
-            if (this.m_Addons != null)
+            if (m_Addons != null)
             {
-                for (int i = 0; i < this.m_Addons.Count; ++i)
+                foreach(var kvp in m_Addons)
                 {
-                    Item item = (Item)this.m_Addons[i];
+                    Item item = kvp.Key;
 
                     if (item != null)
                     {
@@ -3584,7 +3945,9 @@ namespace Server.Multis
                             {
                                 if (retainDeedHue)
                                     deed.Hue = hue;
+
                                 deed.MoveToWorld(item.Location, item.Map);
+                                deed.SendLocalizedMessage(501657, ""); // [no longer locked down]
                             }
                         }
 
@@ -3592,66 +3955,118 @@ namespace Server.Multis
                     }
                 }
 
-                this.m_Addons.Clear();
+                m_Addons.Clear();
             }
 
-            ArrayList inventories = new ArrayList(this.VendorInventories);
+            if (m_Carpets != null)
+            {
+                for (int i = 0; i < m_Carpets.Count; ++i)
+                {
+                    Item carpet = (Item)m_Carpets[i];
+
+                    if (carpet != null)
+                    {
+                        carpet.Movable = true;
+                        carpet.SetLastMoved();
+                        carpet.InvalidateProperties();
+                    }
+                }
+            }
+
+            List<VendorInventory> inventories = new List<VendorInventory>(VendorInventories);
 
             foreach (VendorInventory inventory in inventories)
                 inventory.Delete();
 
-            if (this.MovingCrate != null)
-                this.MovingCrate.Delete();
+            if (MovingCrate != null)
+                MovingCrate.Delete();
 
-            this.KillVendors();
+            KillVendors();
 
             m_AllHouses.Remove(this);
         }
 
-        public static bool HasHouse(Mobile m)
+        public static int GetAccountHouseCount(Mobile m)
+        {
+            Account a = m.Account as Account;
+
+            if (a == null)
+                return 0;
+
+            int count = 0;
+
+            for (int i = 0; i < a.Length; ++i)
+            {
+                if (a[i] != null)
+                {
+                    count += GetHouseCount(a[i]);
+                }
+            }
+
+            return count;
+        }
+
+        public static int GetHouseCount(Mobile m)
         {
             if (m == null)
-                return false;
+                return 0;
 
             List<BaseHouse> list = null;
             m_Table.TryGetValue(m, out list);
 
             if (list == null)
-                return false;
+                return 0;
+
+            int count = 0;
 
             for (int i = 0; i < list.Count; ++i)
             {
                 BaseHouse h = list[i];
 
                 if (!h.Deleted)
-                    return true;
+                    count++;
             }
 
-            return false;
+            return count;
         }
 
-        public static bool HasAccountHouse(Mobile m)
+        public static bool HasHouse(Mobile m)
         {
-            Account a = m.Account as Account;
+            return GetHouseCount(m) > 0;
+        }
 
-            if (a == null)
+        public static bool AtAccountHouseLimit(Mobile m)
+        {
+            return GetAccountHouseCount(m) >= GetAccountHouseLimit(m);
+        }
+
+        public static int GetAccountHouseLimit(Mobile m)
+        {
+            var max = m_AccountHouseLimit;
+            
+            return max;
+        }
+
+        public static bool CheckAccountHouseLimit(Mobile m, bool message = true)
+        {
+            if (AtAccountHouseLimit(m))
+            {
+                if (message)
+                {
+                    if (AccountHouseLimit == 1)
+                    {
+                        m.SendLocalizedMessage(501271); // You already own a house, you may not place another!
+                    }
+                    else
+                    {
+                        m.SendMessage("You already own {0} houses, you may not place any more!", BaseHouse.AccountHouseLimit.ToString());
+                    }
+                }
+
                 return false;
+            }
 
-			if(HasHouse(m))
-			{
-				return true;
-			}
-
-			int count = 0;
-			for (int i = 0; i < a.Length; ++i)
-			{
-				if (a[i] != null && HasHouse(a[i]))
-				{
-					++count;
-				}
-			}
-
-			return count >= m_AccountHouseLimit;
+            return true;
         }
 
         public bool IsOwner(Mobile m)
@@ -3659,18 +4074,18 @@ namespace Server.Multis
             if (m == null)
                 return false;
 
-            if (m == this.m_Owner || m.AccessLevel >= AccessLevel.GameMaster)
+            if (m == m_Owner || m.AccessLevel >= AccessLevel.GameMaster)
                 return true;
 
-            return this.IsAosRules && AccountHandler.CheckAccount(m, this.m_Owner);
+            return IsAosRules && AccountHandler.CheckAccount(m, m_Owner);
         }
 
         public bool IsCoOwner(Mobile m)
         {
-            if (m == null || this.m_CoOwners == null)
+            if (m == null || m_CoOwners == null)
                 return false;
 
-            if (this.IsOwner(m) || this.m_CoOwners.Contains(m))
+            if (IsOwner(m) || m_CoOwners.Contains(m))
                 return true;
 
             foreach (Mobile mob in m_CoOwners)
@@ -3679,26 +4094,26 @@ namespace Server.Multis
                     return true;
             }
 
-            return !this.IsAosRules && AccountHandler.CheckAccount(m, this.m_Owner);
+            return !IsAosRules && AccountHandler.CheckAccount(m, m_Owner);
         }
 
         public bool IsGuildMember(Mobile m)
         {
-            if (m == null || this.Owner == null || this.Owner.Guild == null)
+            if (m == null || Owner == null || Owner.Guild == null)
                 return false;
 
-            return (m.Guild == this.Owner.Guild);
+            return (m.Guild == Owner.Guild);
         }
 
         public void RemoveKeys(Mobile m)
         {
-            if (this.m_Doors != null)
+            if (m_Doors != null)
             {
                 uint keyValue = 0;
 
-                for (int i = 0; keyValue == 0 && i < this.m_Doors.Count; ++i)
+                for (int i = 0; keyValue == 0 && i < m_Doors.Count; ++i)
                 {
-                    BaseDoor door = this.m_Doors[i] as BaseDoor;
+                    BaseDoor door = m_Doors[i] as BaseDoor;
 
                     if (door != null)
                         keyValue = door.KeyValue;
@@ -3710,13 +4125,13 @@ namespace Server.Multis
 
         public void ChangeLocks(Mobile m)
         {
-            uint keyValue = this.CreateKeys(m);
+            uint keyValue = CreateKeys(m);
 
-            if (this.m_Doors != null)
+            if (m_Doors != null)
             {
-                for (int i = 0; i < this.m_Doors.Count; ++i)
+                for (int i = 0; i < m_Doors.Count; ++i)
                 {
-                    BaseDoor door = this.m_Doors[i] as BaseDoor;
+                    BaseDoor door = m_Doors[i] as BaseDoor;
 
                     if (door != null)
                         door.KeyValue = keyValue;
@@ -3726,11 +4141,11 @@ namespace Server.Multis
 
         public void RemoveLocks()
         {
-            if (this.m_Doors != null)
+            if (m_Doors != null)
             {
-                for (int i = 0; i < this.m_Doors.Count; ++i)
+                for (int i = 0; i < m_Doors.Count; ++i)
                 {
-                    BaseDoor door = this.m_Doors[i] as BaseDoor;
+                    BaseDoor door = m_Doors[i] as BaseDoor;
 
                     if (door != null)
                     {
@@ -3783,11 +4198,11 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_Price;
+                return m_Price;
             }
             set
             {
-                this.m_Price = value;
+                m_Price = value;
             }
         }
 
@@ -3798,22 +4213,22 @@ namespace Server.Multis
 
         public bool IsFriend(Mobile m)
         {
-            if (m == null || this.m_Friends == null)
+            if (m == null || m_Friends == null)
                 return false;
 
-            return (this.IsCoOwner(m) || this.m_Friends.Contains(m));
+            return (IsCoOwner(m) || m_Friends.Contains(m));
         }
 
         public bool IsBanned(Mobile m)
         {
-            if (m == null || m == this.Owner || m.IsStaff() || this.m_Bans == null)
+            if (m == null || m == Owner || m.IsStaff() || m_Bans == null)
                 return false;
 
             Account theirAccount = m.Account as Account;
 
-            for (int i = 0; i < this.m_Bans.Count; ++i)
+            for (int i = 0; i < m_Bans.Count; ++i)
             {
-                Mobile c = (Mobile)this.m_Bans[i];
+                Mobile c = (Mobile)m_Bans[i];
 
                 if (c == m)
                     return true;
@@ -3832,7 +4247,7 @@ namespace Server.Multis
             if (m == null)
                 return false;
 
-            if (m.IsStaff() || this.IsFriend(m) || (this.m_Access != null && this.m_Access.Contains(m)))
+            if (m.IsStaff() || IsFriend(m) || (m_Access != null && m_Access.Contains(m)))
                 return true;
 
             if (m is BaseCreature)
@@ -3852,7 +4267,7 @@ namespace Server.Multis
                     if (m == null)
                         return false;
 
-                    if (m.IsStaff() || this.IsFriend(m) || (this.m_Access != null && this.m_Access.Contains(m)))
+                    if (m.IsStaff() || IsFriend(m) || (m_Access != null && m_Access.Contains(m)))
                         return true;
                 }
             }
@@ -3865,10 +4280,10 @@ namespace Server.Multis
             if (check == null)
                 return false;
 
-            if (this.m_LockDowns == null)
+            if (m_LockDowns == null)
                 return false;
 
-            return (this.m_LockDowns.ContainsKey(check) || this.VendorRentalContracts.Contains(check));
+            return (m_LockDowns.ContainsKey(check) || VendorRentalContracts.Contains(check));
         }
 
         public new bool IsSecure(Item item)
@@ -3876,30 +4291,30 @@ namespace Server.Multis
             if (item == null)
                 return false;
 
-            if (this.m_Secures == null)
+            if (m_Secures == null)
                 return false;
 
             bool contains = false;
 
-            for (int i = 0; !contains && i < this.m_Secures.Count; ++i)
-                contains = (((SecureInfo)this.m_Secures[i]).Item == item);
+            for (int i = 0; !contains && i < m_Secures.Count; ++i)
+                contains = m_Secures[i].Item == item;
 
             return contains;
         }
 
         public virtual Guildstone FindGuildstone()
         {
-            Map map = this.Map;
+            Map map = Map;
 
             if (map == null)
                 return null;
 
-            MultiComponentList mcl = this.Components;
-            IPooledEnumerable eable = map.GetItemsInBounds(new Rectangle2D(this.X + mcl.Min.X, this.Y + mcl.Min.Y, mcl.Width, mcl.Height));
+            MultiComponentList mcl = Components;
+            IPooledEnumerable eable = map.GetItemsInBounds(new Rectangle2D(X + mcl.Min.X, Y + mcl.Min.Y, mcl.Width, mcl.Height));
 
             foreach (Item item in eable)
             {
-                if (item is Guildstone && this.Contains(item))
+                if (item is Guildstone && Contains(item))
                 {
                     eable.Free();
                     return (Guildstone)item;
@@ -3950,44 +4365,58 @@ namespace Server.Multis
 
     public class SecureInfo : ISecurable
     {
-        private readonly Container m_Item;
+        private readonly Item m_Item;
         private SecureLevel m_Level;
+        private Mobile m_Owner;
+        private bool m_IsLockdown;
 
-        public Container Item
-        {
-            get
-            {
-                return this.m_Item;
-            }
-        }
-        public SecureLevel Level
-        {
-            get
-            {
-                return this.m_Level;
-            }
-            set
-            {
-                this.m_Level = value;
-            }
-        }
+        public Item Item { get { return m_Item; } }
+        public SecureLevel Level { get { return m_Level; } set { m_Level = value; } }
+        public Mobile Owner { get { return m_Owner; } set { m_Owner = value; } }
+        public bool IsLockdown { get { return m_IsLockdown; } set { m_IsLockdown = value; } }
 
-        public SecureInfo(Container item, SecureLevel level)
+        #region *ONLY USED IN BASEHOUSE VERSION 21*
+        public static bool VersionInsertion { get; set; }
+        #endregion
+
+        public SecureInfo(Item item, SecureLevel level, Mobile owner, bool isLockdown = false)
         {
-            this.m_Item = item;
-            this.m_Level = level;
+            m_Item = item;
+            m_Level = level;
+            m_Owner = owner;
+            m_IsLockdown = isLockdown;
         }
 
         public SecureInfo(GenericReader reader)
         {
-            this.m_Item = reader.ReadItem() as Container;
-            this.m_Level = (SecureLevel)reader.ReadByte();
+            int version = VersionInsertion ? 0 : reader.ReadInt();
+
+            switch (version)
+            {
+                case 1:
+                    {
+                        m_IsLockdown = reader.ReadBool();
+                        m_Owner = reader.ReadMobile();
+                        goto case 0;
+                    }
+                case 0:
+                    {
+                        m_Item = reader.ReadItem();
+                        m_Level = (SecureLevel)reader.ReadByte();
+                        break;
+                    }
+            }
         }
 
         public void Serialize(GenericWriter writer)
         {
-            writer.Write(this.m_Item);
-            writer.Write((byte)this.m_Level);
+            writer.Write(1); // version
+
+            writer.Write(m_IsLockdown);
+            writer.Write(m_Owner);
+
+            writer.Write(m_Item);
+            writer.Write((byte)m_Level);
         }
     }
 
@@ -4001,7 +4430,7 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_Entity;
+                return m_Entity;
             }
         }
 
@@ -4009,7 +4438,7 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_RelativeLocation;
+                return m_RelativeLocation;
             }
         }
 
@@ -4017,15 +4446,15 @@ namespace Server.Multis
         {
             get
             {
-                return this.m_Owner;
+                return m_Owner;
             }
         }
 
         public RelocatedEntity(IEntity entity, Point3D relativeLocation, Mobile owner)
         {
-            this.m_Entity = entity;
-            this.m_RelativeLocation = relativeLocation;
-            this.m_Owner = owner;
+            m_Entity = entity;
+            m_RelativeLocation = relativeLocation;
+            m_Owner = owner;
         }
     }
 
@@ -4039,25 +4468,27 @@ namespace Server.Multis
         public LockdownTarget(bool release, BaseHouse house)
             : base(12, false, TargetFlags.None)
         {
-            this.CheckLOS = false;
+            CheckLOS = false;
 
-            this.m_Release = release;
-            this.m_House = house;
+            m_Release = release;
+            m_House = house;
         }
 
         protected override void OnTargetNotAccessible(Mobile from, object targeted)
         {
-            this.OnTarget(from, targeted);
+            OnTarget(from, targeted);
         }
 
         protected override void OnTarget(Mobile from, object targeted)
         {
-            if (!from.Alive || this.m_House.Deleted || !this.m_House.IsCoOwner(from))
+            if (!from.Alive || m_House.Deleted || !m_House.IsFriend(from))
                 return;
 
             if (targeted is Item)
             {
-                if (this.m_Release)
+                Item item = targeted as Item;
+
+                if (m_Release)
                 {
                     #region Mondain's legacy
                     if (targeted is AddonContainerComponent)
@@ -4065,11 +4496,17 @@ namespace Server.Multis
                         AddonContainerComponent component = (AddonContainerComponent)targeted;
 
                         if (component.Addon != null)
-                            this.m_House.Release(from, component.Addon);
+                            m_House.Release(from, component.Addon);
+                    }
+                    #endregion
+                    else if (item.Parent is Container)
+                    {
+                        from.SendLocalizedMessage(1080387); // You may not release this while it is in a container. 
                     }
                     else
-                    #endregion
-                        this.m_House.Release(from, (Item)targeted);
+                    {
+                        m_House.Release(from, (Item)targeted);
+                    }
                 }
                 else
                 {
@@ -4091,12 +4528,13 @@ namespace Server.Multis
                             AddonContainerComponent component = (AddonContainerComponent)targeted;
 
                             if (component.Addon != null)
-                                this.m_House.LockDown(from, component.Addon);
+                                m_House.LockDown(from, component.Addon);
                         }
                         else
                         #endregion
-
-                            this.m_House.LockDown(from, (Item)targeted);
+                        {
+                            m_House.LockDown(from, (Item)targeted);
+                        }
                     }
                 }
             }
@@ -4119,25 +4557,25 @@ namespace Server.Multis
         public SecureTarget(bool release, BaseHouse house)
             : base(12, false, TargetFlags.None)
         {
-            this.CheckLOS = false;
+            CheckLOS = false;
 
-            this.m_Release = release;
-            this.m_House = house;
+            m_Release = release;
+            m_House = house;
         }
 
         protected override void OnTargetNotAccessible(Mobile from, object targeted)
         {
-            this.OnTarget(from, targeted);
+            OnTarget(from, targeted);
         }
 
         protected override void OnTarget(Mobile from, object targeted)
         {
-            if (!from.Alive || this.m_House.Deleted || !this.m_House.IsCoOwner(from))
+            if (!from.Alive || m_House.Deleted || !m_House.IsCoOwner(from))
                 return;
 
             if (targeted is Item)
             {
-                if (this.m_Release)
+                if (m_Release)
                 {
                     #region Mondain's legacy
                     if (targeted is AddonContainerComponent)
@@ -4145,12 +4583,12 @@ namespace Server.Multis
                         AddonContainerComponent component = (AddonContainerComponent)targeted;
 
                         if (component.Addon != null)
-                            this.m_House.ReleaseSecure(from, component.Addon);
+                            m_House.ReleaseSecure(from, component.Addon);
                     }
                     else
                     #endregion
 
-                        this.m_House.ReleaseSecure(from, (Item)targeted);
+                        m_House.ReleaseSecure(from, (Item)targeted);
                 }
                 else
                 {
@@ -4167,12 +4605,12 @@ namespace Server.Multis
                             AddonContainerComponent component = (AddonContainerComponent)targeted;
 
                             if (component.Addon != null)
-                                this.m_House.AddSecure(from, component.Addon);
+                                m_House.AddSecure(from, component.Addon);
                         }
                         else
                         #endregion
 
-                            this.m_House.AddSecure(from, (Item)targeted);
+                            m_House.AddSecure(from, (Item)targeted);
                     }
                 }
             }
@@ -4190,19 +4628,19 @@ namespace Server.Multis
         public HouseKickTarget(BaseHouse house)
             : base(-1, false, TargetFlags.None)
         {
-            this.CheckLOS = false;
+            CheckLOS = false;
 
-            this.m_House = house;
+            m_House = house;
         }
 
         protected override void OnTarget(Mobile from, object targeted)
         {
-            if (!from.Alive || this.m_House.Deleted || !this.m_House.IsFriend(from))
+            if (!from.Alive || m_House.Deleted || !m_House.IsFriend(from))
                 return;
 
             if (targeted is Mobile)
             {
-                this.m_House.Kick(from, (Mobile)targeted);
+                m_House.Kick(from, (Mobile)targeted);
             }
             else
             {
@@ -4219,23 +4657,23 @@ namespace Server.Multis
         public HouseBanTarget(bool ban, BaseHouse house)
             : base(-1, false, TargetFlags.None)
         {
-            this.CheckLOS = false;
+            CheckLOS = false;
 
-            this.m_House = house;
-            this.m_Banning = ban;
+            m_House = house;
+            m_Banning = ban;
         }
 
         protected override void OnTarget(Mobile from, object targeted)
         {
-            if (!from.Alive || this.m_House.Deleted || !this.m_House.IsFriend(from))
+            if (!from.Alive || m_House.Deleted || !m_House.IsFriend(from))
                 return;
 
             if (targeted is Mobile)
             {
-                if (this.m_Banning)
-                    this.m_House.Ban(from, (Mobile)targeted);
+                if (m_Banning)
+                    m_House.Ban(from, (Mobile)targeted);
                 else
-                    this.m_House.RemoveBan(from, (Mobile)targeted);
+                    m_House.RemoveBan(from, (Mobile)targeted);
             }
             else
             {
@@ -4251,18 +4689,18 @@ namespace Server.Multis
         public HouseAccessTarget(BaseHouse house)
             : base(-1, false, TargetFlags.None)
         {
-            this.CheckLOS = false;
+            CheckLOS = false;
 
-            this.m_House = house;
+            m_House = house;
         }
 
         protected override void OnTarget(Mobile from, object targeted)
         {
-            if (!from.Alive || this.m_House.Deleted || !this.m_House.IsFriend(from))
+            if (!from.Alive || m_House.Deleted || !m_House.IsFriend(from))
                 return;
 
             if (targeted is Mobile)
-                this.m_House.GrantAccess(from, (Mobile)targeted);
+                m_House.GrantAccess(from, (Mobile)targeted);
             else
                 from.SendLocalizedMessage(1060712); // That is not a player.
         }
@@ -4276,23 +4714,23 @@ namespace Server.Multis
         public CoOwnerTarget(bool add, BaseHouse house)
             : base(12, false, TargetFlags.None)
         {
-            this.CheckLOS = false;
+            CheckLOS = false;
 
-            this.m_House = house;
-            this.m_Add = add;
+            m_House = house;
+            m_Add = add;
         }
 
         protected override void OnTarget(Mobile from, object targeted)
         {
-            if (!from.Alive || this.m_House.Deleted || !this.m_House.IsOwner(from))
+            if (!from.Alive || m_House.Deleted || !m_House.IsOwner(from))
                 return;
 
             if (targeted is Mobile)
             {
-                if (this.m_Add)
-                    this.m_House.AddCoOwner(from, (Mobile)targeted);
+                if (m_Add)
+                    m_House.AddCoOwner(from, (Mobile)targeted);
                 else
-                    this.m_House.RemoveCoOwner(from, (Mobile)targeted);
+                    m_House.RemoveCoOwner(from, (Mobile)targeted);
             }
             else
             {
@@ -4309,23 +4747,23 @@ namespace Server.Multis
         public HouseFriendTarget(bool add, BaseHouse house)
             : base(12, false, TargetFlags.None)
         {
-            this.CheckLOS = false;
+            CheckLOS = false;
 
-            this.m_House = house;
-            this.m_Add = add;
+            m_House = house;
+            m_Add = add;
         }
 
         protected override void OnTarget(Mobile from, object targeted)
         {
-            if (!from.Alive || this.m_House.Deleted || !this.m_House.IsCoOwner(from))
+            if (!from.Alive || m_House.Deleted || !m_House.IsCoOwner(from))
                 return;
 
             if (targeted is Mobile)
             {
-                if (this.m_Add)
-                    this.m_House.AddFriend(from, (Mobile)targeted);
+                if (m_Add)
+                    m_House.AddFriend(from, (Mobile)targeted);
                 else
-                    this.m_House.RemoveFriend(from, (Mobile)targeted);
+                    m_House.RemoveFriend(from, (Mobile)targeted);
             }
             else
             {
@@ -4341,15 +4779,15 @@ namespace Server.Multis
         public HouseOwnerTarget(BaseHouse house)
             : base(12, false, TargetFlags.None)
         {
-            this.CheckLOS = false;
+            CheckLOS = false;
 
-            this.m_House = house;
+            m_House = house;
         }
 
         protected override void OnTarget(Mobile from, object targeted)
         {
             if (targeted is Mobile)
-                this.m_House.BeginConfirmTransfer(from, (Mobile)targeted);
+                m_House.BeginConfirmTransfer(from, (Mobile)targeted);
             else
                 from.SendLocalizedMessage(501384); // Only a player can own a house!
         }
@@ -4365,21 +4803,25 @@ namespace Server.Multis
         public SetSecureLevelEntry(Item item, ISecurable securable)
             : base(6203, 6)
         {
-            this.m_Item = item;
-            this.m_Securable = securable;
+            m_Item = item;
+            m_Securable = securable;
         }
 
         public static ISecurable GetSecurable(Mobile from, Item item)
         {
             BaseHouse house = BaseHouse.FindHouseAt(item);
 
-            if (house == null || !house.IsOwner(from) || !house.IsAosRules)
+            if (house == null || !house.IsAosRules)
                 return null;
 
+            bool owner = house.IsOwner(from);
             ISecurable sec = null;
 
             if (item is ISecurable)
             {
+                if (!owner)
+                    return null;
+
                 bool isOwned = house.Doors.Contains(item);
 
                 if (!isOwned)
@@ -4388,20 +4830,15 @@ namespace Server.Multis
                 if (!isOwned)
                     isOwned = house.IsLockedDown(item);
 
+                if (!isOwned)
+                    isOwned = item is BaseAddon;
+
                 if (isOwned)
                     sec = (ISecurable)item;
             }
             else
             {
-                ArrayList list = house.Secures;
-
-                for (int i = 0; sec == null && list != null && i < list.Count; ++i)
-                {
-                    SecureInfo si = (SecureInfo)list[i];
-
-                    if (si.Item == item)
-                        sec = si;
-                }
+                sec = house.GetSecureInfoFor(from, item);
             }
 
             return sec;
@@ -4417,12 +4854,50 @@ namespace Server.Multis
 
         public override void OnClick()
         {
-            ISecurable sec = GetSecurable(this.Owner.From, this.m_Item);
+            ISecurable sec = GetSecurable(Owner.From, m_Item);
 
             if (sec != null)
             {
-                this.Owner.From.CloseGump(typeof (SetSecureLevelGump));
-                this.Owner.From.SendGump(new SetSecureLevelGump(this.Owner.From, sec, BaseHouse.FindHouseAt(this.m_Item)));
+                Mobile owner = sec is SecureInfo ? ((SecureInfo)sec).Owner : Owner.From;
+
+                Owner.From.CloseGump(typeof (SetSecureLevelGump));
+                Owner.From.SendGump(new SetSecureLevelGump(owner, sec, BaseHouse.FindHouseAt(m_Item)));
+            }
+        }
+    }
+
+    public class ReleaseEntry : ContextMenuEntry
+    {
+        public Mobile Mobile { get; set; }
+        public Item Item { get; set; }
+        public BaseHouse House { get; set; }
+
+        public ReleaseEntry(Mobile m, Item item, BaseHouse house)
+            : base(1153880, 8)
+        {
+            Item = item;
+            Mobile = m;
+            House = house;
+
+            Enabled = Mobile.Alive;
+        }
+
+        public override void OnClick()
+        {
+            if (Mobile.Alive && BaseHouse.FindHouseAt(Mobile) == House && House.IsOwner(Mobile))
+            {
+                if (Mobile.Backpack == null || !Mobile.Backpack.CheckHold(Mobile, Item, false))
+                {
+                    Mobile.SendLocalizedMessage(1153881); // Your pack cannot hold this
+                }
+                else if (House.Release(Mobile, Item))
+                {
+                    Mobile.Backpack.DropItem(Item);
+                }
+            }
+            else
+            {
+                Mobile.SendLocalizedMessage(1153882); // You do not own that.
             }
         }
     }
@@ -4434,16 +4909,16 @@ namespace Server.Multis
         public TempNoHousingRegion(BaseHouse house, Mobile regionowner)
             : base(null, house.Map, Region.DefaultPriority, house.Region.Area)
         {
-            this.Register();
+            Register();
 
-            this.m_RegionOwner = regionowner;
+            m_RegionOwner = regionowner;
 
             Timer.DelayCall(house.RestrictedPlacingTime, Unregister);
         }
 
         public override bool AllowHousing(Mobile from, Point3D p)
         {
-            return (from == this.m_RegionOwner || AccountHandler.CheckAccount(from, this.m_RegionOwner));
+            return (from == m_RegionOwner || AccountHandler.CheckAccount(from, m_RegionOwner));
         }
     }
 }

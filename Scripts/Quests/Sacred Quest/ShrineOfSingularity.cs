@@ -8,7 +8,7 @@ namespace Server.Items
 {
     public class ShrineOfSingularity : Item
     {
-        private static readonly TimeSpan FailDelay = TimeSpan.FromHours(24);
+        private static readonly TimeSpan FailDelay = TimeSpan.FromHours(2);
 
         [Constructable]
         public ShrineOfSingularity() : base(0x48A8)
@@ -99,7 +99,7 @@ namespace Server.Items
         {
             base.Serialize(writer);
 
-            writer.Write((int)0); // version
+            writer.Write((int)1); // version
 
             Timer.DelayCall(TimeSpan.FromSeconds(10), new TimerCallback(DefragDelays_Callback));
         }
@@ -111,6 +111,17 @@ namespace Server.Items
             int version = reader.ReadInt();
 
             Instance = this;
+
+            if (version == 0)
+            {
+                Item book = new BookOfCircles();
+                book.Movable = false;
+                book.MoveToWorld(new Point3D(1000, 3991, -33), Map.TerMur);
+
+                book = new ShrineMantra();
+                book.Movable = false;
+                book.MoveToWorld(new Point3D(994, 3991, -33), Map.TerMur);
+            }
         }
 
         public static ShrineOfSingularity Instance { get; set; }

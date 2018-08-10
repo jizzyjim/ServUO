@@ -7,18 +7,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Server.Items;
-/*"Conduit" with 120 Necromancy/120 Spirit Speak places 4 Skull Candles in a 5x5 tile radius for 10 seconds,
- * and if one of the creatures in the radius is hit with a single target Necro spell, then all creatures in 
- * the radius will be affected at the same time, although at 80% normal strength. For example, you can get a
- * bunch of monsters inside the radius, then Corpse Skin all of them simultaneously to reduce their Fire/Poison 
- * Resist by 15 (useful for Fire Horns or Hit Fire Area weps). You can also Strangulate all of them simultaneously 
- * to apply a DoT, or use Poison Strike to have a sort of "Poison Cluster Bomb" go off, where every single creature 
- * in the radius get's hit with the main Poison Strike, as well as multiple secondary strikes if they're bunched up.
 
-Unfortunately, for some reason Conduit will drop any non SC Wep you're wielding, into your pack, which no other Necro spell does.
- 
- The necromancer creates a conduit field at a targeted location that causes all targeted necromancy spells to effect 
- * all valid targets within the field at reduced spell strength based on necromancy skill, spirit speak skill, and mastery level.*/ 
 namespace Server.Spells.SkillMasteries
 {
 	public class ConduitSpell : SkillMasterySpell
@@ -92,7 +81,7 @@ namespace Server.Spells.SkillMasteries
 
                 Zone = rec;
                 Strength = (int)((Caster.Skills[CastSkill].Value + Caster.Skills[DamageSkill].Value + (GetMasteryLevel() * 20)) / 3.75);
-                Expires = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+                Expires = DateTime.UtcNow + TimeSpan.FromSeconds(Core.TOL ? 6 : 4 + (Caster.Skills[CastSkill].Value + Caster.Skills[DamageSkill].Value) / 36);
 
                 BuffInfo.AddBuff(Caster, new BuffInfo(BuffIcon.Conduit, 1155901, 1156053, Strength.ToString())); //Targeted Necromancy spells used on a target within the Conduit field will affect all valid targets within the field at ~1_PERCT~% strength. 
 
@@ -149,19 +138,6 @@ namespace Server.Spells.SkillMasteries
 
             return false;
         }
-
-        /*public static double ModifiedStrength(Mobile caster, Mobile victim)
-        {
-            List<SkillMasterySpell> spells = GetSpells(caster).Where(s => s.GetType() == typeof(ConduitSpell));
-
-            foreach (SkillMasterySpell spell in spells)
-            {
-                if (spell.Zone.Contains(victim))
-                    return (double)spell.Strength / 100;
-            }
-
-            return 1.0;
-        }*/
 
         private class InternalItem : Item
         {

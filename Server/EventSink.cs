@@ -1,9 +1,3 @@
-#region Header
-// **********
-// ServUO - EventSink.cs
-// **********
-#endregion
-
 #region References
 using System;
 using System.Collections.Generic;
@@ -13,12 +7,22 @@ using System.Reflection;
 
 using Server.Accounting;
 using Server.Commands;
+using Server.ContextMenus;
 using Server.Guilds;
+using Server.Items;
 using Server.Network;
 #endregion
 
 namespace Server
 {
+	public delegate void OnItemObtainedEventHandler(OnItemObtainedEventArgs e);
+
+	public delegate void CheckEquipItemEventHandler(CheckEquipItemEventArgs e);
+
+	public delegate void ContextMenuEventHandler(ContextMenuEventArgs e);
+
+	public delegate void WorldBroadcastEventHandler(WorldBroadcastEventArgs e);
+
 	public delegate void CharacterCreatedEventHandler(CharacterCreatedEventArgs e);
 
 	public delegate void OpenDoorMacroEventHandler(OpenDoorMacroEventArgs e);
@@ -63,13 +67,13 @@ namespace Server
 
 	public delegate void PlayerDeathEventHandler(PlayerDeathEventArgs e);
 
+	public delegate void CreatureDeathEventHandler(CreatureDeathEventArgs e);
+
 	public delegate void VirtueGumpRequestEventHandler(VirtueGumpRequestEventArgs e);
 
 	public delegate void VirtueItemRequestEventHandler(VirtueItemRequestEventArgs e);
 
 	public delegate void VirtueMacroRequestEventHandler(VirtueMacroRequestEventArgs e);
-
-	public delegate void ChatRequestEventHandler(ChatRequestEventArgs e);
 
 	public delegate void AccountLoginEventHandler(AccountLoginEventArgs e);
 
@@ -107,6 +111,8 @@ namespace Server
 
 	public delegate void ClientVersionReceivedHandler(ClientVersionReceivedArgs e);
 
+    public delegate void ClientTypeReceivedHandler(ClientTypeReceivedArgs e);
+
 	public delegate void OnKilledByEventHandler(OnKilledByEventArgs e);
 
 	public delegate void OnItemUseEventHandler(OnItemUseEventArgs e);
@@ -127,7 +133,9 @@ namespace Server
 
 	public delegate void CraftSuccessEventHandler(CraftSuccessEventArgs e);
 
-	public delegate void ItemCreatedEventHandler(ItemCreatedEventArgs e);
+    public delegate void SkillGainEventHandler(SkillGainEventArgs e);
+
+    public delegate void ItemCreatedEventHandler(ItemCreatedEventArgs e);
 
 	public delegate void ItemDeletedEventHandler(ItemDeletedEventArgs e);
 
@@ -147,6 +155,67 @@ namespace Server
 
     public delegate void TargetByResourceMacroEventHandler(TargetByResourceMacroEventArgs e);
 
+	public class OnItemObtainedEventArgs : EventArgs
+	{
+		private readonly Mobile m_Mobile;
+		private readonly Item m_Item;
+
+		public OnItemObtainedEventArgs(Mobile from, Item item)
+		{
+			m_Mobile = from;
+			m_Item = item;
+		}
+
+		public Mobile Mobile { get { return m_Mobile; } }
+		public Item Item { get { return m_Item; } }
+	}
+
+	public class CheckEquipItemEventArgs : EventArgs
+	{
+		public Mobile Mobile { get; private set; }
+		public Item Item { get; private set; }
+		public bool Message { get; private set; }
+
+		public bool Block { get; set; }
+
+		public CheckEquipItemEventArgs(Mobile m, Item item, bool message)
+		{
+			Mobile = m;
+			Item = item;
+			Message = message;
+		}
+	}
+
+	public class ContextMenuEventArgs : EventArgs
+	{
+		public Mobile Mobile { get; private set; }
+		public IEntity Target { get; private set; }
+		public List<ContextMenuEntry> Entries { get; private set; }
+
+		public ContextMenuEventArgs(Mobile m, IEntity target, List<ContextMenuEntry> entries)
+		{
+			Mobile = m;
+			Target = target;
+			Entries = entries;
+		}
+	}
+
+	public class WorldBroadcastEventArgs : EventArgs
+	{
+		public int Hue { get; set; }
+		public bool Ascii { get; set; }
+		public AccessLevel Access { get; set; }
+		public string Text { get; set; }
+
+		public WorldBroadcastEventArgs(int hue, bool ascii, AccessLevel access, string text)
+		{
+			Hue = hue;
+			Ascii = ascii;
+			Access = access;
+			Text = text;
+		}
+	}
+
     public class ClientVersionReceivedArgs : EventArgs
 	{
 		private readonly NetState m_State;
@@ -161,6 +230,18 @@ namespace Server
 			m_Version = cv;
 		}
 	}
+
+    public class ClientTypeReceivedArgs : EventArgs
+    {
+        private readonly NetState m_State;
+
+        public NetState State { get { return m_State; } }
+
+        public ClientTypeReceivedArgs(NetState state)
+        {
+            m_State = state;
+        }
+    }
 
 	public class CreateGuildEventArgs : EventArgs
 	{
@@ -410,27 +491,41 @@ namespace Server
 		}
 	}
 
-	public class ChatRequestEventArgs : EventArgs
+	public class PlayerDeathEventArgs : EventArgs
 	{
-		private readonly Mobile m_Mobile;
+		public Mobile Mobile { get; private set; }
+		public Mobile Killer { get; private set; }
+		public Container Corpse { get; private set; }
 
-		public Mobile Mobile { get { return m_Mobile; } }
+		public PlayerDeathEventArgs(Mobile mobile)
+			: this(mobile, mobile.LastKiller, mobile.Corpse)
+		{ }
 
-		public ChatRequestEventArgs(Mobile mobile)
+		public PlayerDeathEventArgs(Mobile mobile, Mobile killer, Container corpse)
 		{
-			m_Mobile = mobile;
+			Mobile = mobile;
+			Killer = killer;
+			Corpse = corpse;
 		}
 	}
 
-	public class PlayerDeathEventArgs : EventArgs
+	public class CreatureDeathEventArgs : EventArgs
 	{
-		private readonly Mobile m_Mobile;
+		public Mobile Creature { get; private set; }
+		public Mobile Killer { get; private set; }
+		public Container Corpse { get; private set; }
 
-		public Mobile Mobile { get { return m_Mobile; } }
+		public bool ClearCorpse { get; set; }
 
-		public PlayerDeathEventArgs(Mobile mobile)
+		public CreatureDeathEventArgs(Mobile creature)
+			: this(creature, creature.LastKiller, creature.Corpse)
+		{ }
+
+		public CreatureDeathEventArgs(Mobile creature, Mobile killer, Container corpse)
 		{
-			m_Mobile = mobile;
+			Creature = creature;
+			Killer = killer;
+			Corpse = corpse;
 		}
 	}
 
@@ -972,16 +1067,19 @@ namespace Server
 	public class OnEnterRegionEventArgs : EventArgs
 	{
 		private readonly Mobile m_From;
-		private readonly Region m_Region;
+        private readonly Region m_OldRegion;
+		private readonly Region m_NewRegion;
 
-		public OnEnterRegionEventArgs(Mobile from, Region region)
+		public OnEnterRegionEventArgs(Mobile from, Region oldRegion, Region newRegion)
 		{
 			m_From = from;
-			m_Region = region;
+            m_OldRegion = oldRegion;
+			m_NewRegion = newRegion;
 		}
 
 		public Mobile From { get { return m_From; } }
-		public Region Region { get { return m_Region; } }
+		public Region OldRegion { get { return m_OldRegion; } }
+        public Region NewRegion { get { return m_NewRegion; } }
 	}
 
 	public class OnConsumeEventArgs : EventArgs
@@ -1094,7 +1192,23 @@ namespace Server
 		}
 	}
 
-	public class ItemCreatedEventArgs : EventArgs
+    public class SkillGainEventArgs : EventArgs
+    {
+        public int Gained { get; private set; }
+
+        public Mobile From { get; private set; }
+        public Skill Skill { get; private set; }
+
+
+        public SkillGainEventArgs(Mobile from, Skill skill, int toGain)
+        {
+            From = from;
+            Skill = skill;
+            Gained = toGain;
+        }
+    }
+
+    public class ItemCreatedEventArgs : EventArgs
 	{
 		public Item Item { get; set; }
 
@@ -1134,110 +1248,114 @@ namespace Server
 		}
 	}
 
-    public class TargetedSpellEventArgs : EventArgs 
+    public class TargetedSpellEventArgs : EventArgs
     {
-        private NetState state;
-        private IEntity target;
-        private short spellID;
+        private Mobile m_Mobile;
+        private IEntity m_Target;
+        private short m_SpellID;
 
-        public NetState NetState { get { return state; } }
-        public IEntity Target { get { return target; } }
-        public short SpellID { get { return spellID; } }
+        public Mobile Mobile { get { return m_Mobile; } }
+        public IEntity Target { get { return m_Target; } }
+        public short SpellID { get { return m_SpellID; } }
 
-        public TargetedSpellEventArgs(NetState state, IEntity target, short spellID)
+        public TargetedSpellEventArgs(Mobile m, IEntity target, short spellID)
         {
-            this.state = state;
-            this.target = target;
-            this.spellID = spellID;
+            m_Mobile = m;
+            m_Target = target;
+            m_SpellID = spellID;
         }
     }
 
-    public class TargetedSkillEventArgs : EventArgs 
+    public class TargetedSkillEventArgs : EventArgs
     {
-        private NetState state;
-        private IEntity target;
-        private short skillID;
+        private Mobile m_Mobile;
+        private IEntity m_Target;
+        private short m_SkillID;
 
-        public NetState NetState { get { return state; } }
-        public IEntity Target { get { return target; } }
-        public short SkillID { get { return skillID; } }
+        public Mobile Mobile { get { return m_Mobile; } }
+        public IEntity Target { get { return m_Target; } }
+        public short SkillID { get { return m_SkillID; } }
 
-        public TargetedSkillEventArgs(NetState state, IEntity target, short skillID)
+        public TargetedSkillEventArgs(Mobile m, IEntity target, short skillID)
         {
-            this.state = state;
-            this.target = target;
-            this.skillID = skillID;
+            m_Mobile = m;
+            m_Target = target;
+            m_SkillID = skillID;
         }
     }
 
-    public class TargetedItemUseEventArgs : EventArgs 
+    public class TargetedItemUseEventArgs : EventArgs
     {
-        private NetState state;
-        private IEntity src;
-        private IEntity target;
+        private Mobile m_Mobile;
+        private IEntity m_Source;
+        private IEntity m_Target;
 
-        public NetState NetState { get { return state; } }
-        public IEntity Source { get { return src; } }
-        public IEntity Target { get { return target; } }
+        public Mobile Mobile { get { return m_Mobile; } }
+        public IEntity Source { get { return m_Source; } }
+        public IEntity Target { get { return m_Target; } }
 
-        public TargetedItemUseEventArgs(NetState state, IEntity src, IEntity target)
+        public TargetedItemUseEventArgs(Mobile mobile, IEntity src, IEntity target)
         {
-            this.state = state;
-            this.src = src;
-            this.target = target;
+            m_Mobile = mobile;
+            m_Source = src;
+            m_Target = target;
         }
     }
 
     public class TargetByResourceMacroEventArgs : EventArgs
     {
-        private NetState state;
-        private Item m_tool;
-        private int m_resource_type;
+        private Mobile m_Mobile;
+        private Item m_Tool;
+        private int m_ResourceType;
 
-        public NetState NetState { get { return state; } }
-        public Item Tool { get { return m_tool; } }
-        public int ResourceType { get { return m_resource_type; } }
+        public Mobile Mobile { get { return m_Mobile; } }
+        public Item Tool { get { return m_Tool; } }
+        public int ResourceType { get { return m_ResourceType; } }
 
-        public TargetByResourceMacroEventArgs(NetState state, Item tool, int type)
+        public TargetByResourceMacroEventArgs(Mobile mobile, Item tool, int type)
         {
-            this.state = state;
-            this.m_tool = tool;
-            this.m_resource_type = type;
+            m_Mobile = mobile;
+            m_Tool = tool;
+            m_ResourceType = type;
         }
     }
 
     public class EquipMacroEventArgs : EventArgs
     {
-        private NetState state;
-        private List<int> m_list;
+        private Mobile m_Mobile;
+        private List<int> m_List;
 
-        public NetState NetState { get { return state; } }
-        public List<int> List { get { return m_list; } }
+        public Mobile Mobile { get { return m_Mobile; } }
+        public List<int> List { get { return m_List; } }
 
-        public EquipMacroEventArgs(NetState state, List<int> list)
+        public EquipMacroEventArgs(Mobile mobile, List<int> list)
         {
-            this.state = state;
-            this.m_list = list;
+            m_Mobile = mobile;
+            m_List = list;
         }
     }
 
     public class UnequipMacroEventArgs : EventArgs
     {
-        private NetState state;
-        private List<int> m_list;
+        private Mobile m_Mobile;
+        private List<int> m_List;
 
-        public NetState NetState { get { return state; } }
-        public List<int> List { get { return m_list; } }
+        public Mobile Mobile { get { return m_Mobile; } }
+        public List<int> List { get { return m_List; } }
 
-        public UnequipMacroEventArgs(NetState state, List<int> list)
+        public UnequipMacroEventArgs(Mobile mobile, List<int> list)
         {
-            this.state = state;
-            this.m_list = list;
+            m_Mobile = mobile;
+            m_List = list;
         }
     }
 
     public static class EventSink
 	{
+		public static event OnItemObtainedEventHandler OnItemObtained;
+		public static event CheckEquipItemEventHandler CheckEquipItem;
+		public static event ContextMenuEventHandler ContextMenu;
+		public static event WorldBroadcastEventHandler WorldBroadcast;
 		public static event CharacterCreatedEventHandler CharacterCreated;
 		public static event OpenDoorMacroEventHandler OpenDoorMacroUsed;
 		public static event SpeechEventHandler Speech;
@@ -1260,10 +1378,10 @@ namespace Server
 		public static event DisconnectedEventHandler Disconnected;
 		public static event RenameRequestEventHandler RenameRequest;
 		public static event PlayerDeathEventHandler PlayerDeath;
+		public static event CreatureDeathEventHandler CreatureDeath;
 		public static event VirtueGumpRequestEventHandler VirtueGumpRequest;
 		public static event VirtueItemRequestEventHandler VirtueItemRequest;
 		public static event VirtueMacroRequestEventHandler VirtueMacroRequest;
-		public static event ChatRequestEventHandler ChatRequest;
 		public static event AccountLoginEventHandler AccountLogin;
 		public static event PaperdollRequestEventHandler PaperdollRequest;
 		public static event ProfileRequestEventHandler ProfileRequest;
@@ -1283,6 +1401,7 @@ namespace Server
 		public static event GuildGumpRequestHandler GuildGumpRequest;
 		public static event QuestGumpRequestHandler QuestGumpRequest;
 		public static event ClientVersionReceivedHandler ClientVersionReceived;
+        public static event ClientTypeReceivedHandler ClientTypeReceived;
 		public static event OnKilledByEventHandler OnKilledBy;
 		public static event OnItemUseEventHandler OnItemUse;
 		public static event OnEnterRegionEventHandler OnEnterRegion;
@@ -1293,8 +1412,9 @@ namespace Server
 		public static event ResourceHarvestAttemptEventHandler ResourceHarvestAttempt;
 		public static event ResourceHarvestSuccessEventHandler ResourceHarvestSuccess;
 		public static event CraftSuccessEventHandler CraftSuccess;
+        public static event SkillGainEventHandler SkillGain;
 
-		public static event ItemCreatedEventHandler ItemCreated;
+        public static event ItemCreatedEventHandler ItemCreated;
 		public static event ItemDeletedEventHandler ItemDeleted;
 		public static event MobileCreatedEventHandler MobileCreated;
 		public static event MobileDeletedEventHandler MobileDeleted;
@@ -1306,6 +1426,38 @@ namespace Server
         public static event UnequipMacroEventHandler UnequipMacro;
         public static event TargetByResourceMacroEventHandler TargetByResourceMacro;
 
+		public static void InvokeOnItemObtained(OnItemObtainedEventArgs e)
+		{
+			if (OnItemObtained != null)
+			{
+				OnItemObtained(e);
+			}
+		}
+
+		public static void InvokeCheckEquipItem(CheckEquipItemEventArgs e)
+		{
+			if (CheckEquipItem != null)
+			{
+				CheckEquipItem(e);
+			}
+		}
+
+		public static void InvokeContextMenu(ContextMenuEventArgs e)
+		{
+			if (ContextMenu != null)
+			{
+				ContextMenu(e);
+			}
+		}
+
+		public static void InvokeWorldBroadcast(WorldBroadcastEventArgs e)
+		{
+			if (WorldBroadcast != null)
+			{
+				WorldBroadcast(e);
+			}
+		}
+
         public static void InvokeClientVersionReceived(ClientVersionReceivedArgs e)
 		{
 			if (ClientVersionReceived != null)
@@ -1313,6 +1465,14 @@ namespace Server
 				ClientVersionReceived(e);
 			}
 		}
+
+        public static void InvokeClientTypeReceived(ClientTypeReceivedArgs e)
+        {
+            if (ClientTypeReceived != null)
+            {
+                ClientTypeReceived(e);
+            }
+        }
 
 		public static void InvokeServerStarted()
 		{
@@ -1426,14 +1586,6 @@ namespace Server
 			}
 		}
 
-		public static void InvokeChatRequest(ChatRequestEventArgs e)
-		{
-			if (ChatRequest != null)
-			{
-				ChatRequest(e);
-			}
-		}
-
 		public static void InvokeVirtueItemRequest(VirtueItemRequestEventArgs e)
 		{
 			if (VirtueItemRequest != null)
@@ -1463,6 +1615,14 @@ namespace Server
 			if (PlayerDeath != null)
 			{
 				PlayerDeath(e);
+			}
+		}
+
+		public static void InvokeCreatureDeath(CreatureDeathEventArgs e)
+		{
+			if (CreatureDeath != null)
+			{
+				CreatureDeath(e);
 			}
 		}
 
@@ -1738,13 +1898,21 @@ namespace Server
 			}
 		}
 
-		public static void InvokeCraftSuccess(CraftSuccessEventArgs e)
+        public static void InvokeCraftSuccess(CraftSuccessEventArgs e)
 		{
 			if (CraftSuccess != null)
 			{
 				CraftSuccess(e);
 			}
 		}
+
+        public static void InvokeSkillGain(SkillGainEventArgs e)
+        {
+            if(SkillGain != null)
+            {
+                SkillGain(e);
+            }
+        }
 
 		public static void InvokeItemCreated(ItemCreatedEventArgs e)
 		{
@@ -1805,7 +1973,7 @@ namespace Server
         public static void InvokeTargetByResourceMacro(TargetByResourceMacroEventArgs e)
         {
             if (TargetByResourceMacro != null)
-            { 
+            {
                 TargetByResourceMacro(e);
             }
         }
@@ -1828,6 +1996,10 @@ namespace Server
 
         public static void Reset()
 		{
+			OnItemObtained = null;
+			CheckEquipItem = null;
+			ContextMenu = null;
+			WorldBroadcast = null;
 			CharacterCreated = null;
 			OpenDoorMacroUsed = null;
 			Speech = null;
@@ -1850,10 +2022,10 @@ namespace Server
 			Disconnected = null;
 			RenameRequest = null;
 			PlayerDeath = null;
+			CreatureDeath = null;
 			VirtueGumpRequest = null;
 			VirtueItemRequest = null;
 			VirtueMacroRequest = null;
-			ChatRequest = null;
 			AccountLogin = null;
 			PaperdollRequest = null;
 			ProfileRequest = null;
@@ -1877,7 +2049,8 @@ namespace Server
 			ResourceHarvestAttempt = null;
 			ResourceHarvestSuccess = null;
 			CraftSuccess = null;
-			
+			SkillGain = null;
+
 			ItemCreated = null;
 			ItemDeleted = null;
 			MobileCreated = null;

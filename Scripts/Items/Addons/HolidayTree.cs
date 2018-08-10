@@ -197,6 +197,11 @@ namespace Server.Items
             }
         }
 
+        void IChopable.OnChop(Mobile user)
+        {
+            OnDoubleClick(user);
+        }
+
         public override void OnDoubleClick(Mobile from)
         {
             if (from.InRange(this.GetWorldLocation(), 1))
@@ -209,7 +214,7 @@ namespace Server.Items
 
                     BaseHouse house = BaseHouse.FindHouseAt(this);
 
-                    if (house != null && house.Addons.Contains(this))
+                    if (house != null && house.Addons.ContainsKey(this))
                     {
                         house.Addons.Remove(this);
                     }

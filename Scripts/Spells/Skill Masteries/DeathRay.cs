@@ -31,7 +31,7 @@ namespace Server.Spells.SkillMasteries
 		public override int RequiredMana{ get { return 50; } }
         public override int DamageThreshold { get { return 1; } }
         public override bool DamageCanDisrupt { get { return true; } }
-        public override int TickTime { get { return 3; } }
+        public override double TickTime { get { return 3; } }
 
         public override int UpkeepCancelMessage { get { return 1155874; } } // You do not have enough mana to keep your death ray active.
         public override int DisruptMessage { get { return 1155793; } } // This action disturbs the focus necessary to keep your death ray active and it dissipates.
@@ -66,6 +66,7 @@ namespace Server.Spells.SkillMasteries
                     }
                     else
                     {
+                        SpellHelper.CheckReflect(0, Caster, ref m);
                         SkillMasterySpell spell = GetSpell(Caster, this.GetType());
 
                         if (spell != null && spell.Target == m)
@@ -123,6 +124,13 @@ namespace Server.Spells.SkillMasteries
             {
                 double damage = (Caster.Skills[CastSkill].Base + Caster.Skills[DamageSkill].Base) * ((double)GetMasteryLevel() * .8);
                 damage /= Target is PlayerMobile ? 5.15 : 2.5;
+
+                damage *= GetDamageScalar(Target);
+
+                int sdiBonus = SpellHelper.GetSpellDamageBonus(Caster, Target, CastSkill, Caster.Player && Target.Player);
+
+                damage *= (100 + sdiBonus);
+                damage /= 100;
 
                 SpellHelper.Damage(this, Target, (int)damage, 0, 0, 0, 0, 100);
             }

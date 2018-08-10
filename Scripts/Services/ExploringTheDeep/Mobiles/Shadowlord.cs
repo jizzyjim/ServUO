@@ -24,9 +24,9 @@ namespace Server.Mobiles
 
         private Type[] _ArtifactTypes = new Type[]
         {
-            typeof(FigureheadOfBmvArarat),      typeof(ShipsBellOfBmvArarat),       typeof(SternAnchorOfBmvArarat),         typeof(Abhorrence),
-            typeof(CaptainJohnesBlade),         typeof(Craven),                     typeof(Equivocation),                   typeof(GargishCaptainJohnesBlade),
-            typeof(GargishEquivocation),        typeof(GargishPincer),              typeof(Pincer)
+            typeof(Abhorrence),         typeof(CaptainJohnesBlade),             typeof(Craven),
+            typeof(Equivocation),       typeof(GargishCaptainJohnesBlade),      typeof(GargishEquivocation),
+            typeof(GargishPincer),      typeof(Pincer)
         };
 
         [CommandProperty(AccessLevel.GameMaster)]
@@ -55,12 +55,12 @@ namespace Server.Mobiles
             this.Body = 146;
             this.BaseSoundID = 0x4B0;
 
-            this.SetStr(900, 960);
-            this.SetDex(1000, 1030);
-            this.SetInt(1100, 1200);
+            this.SetStr(981, 1078);
+            this.SetDex(1003, 1114);
+            this.SetInt(1098, 1245);
 
-            this.SetHits(30000);
-            this.SetStam(1000, 1050);
+            this.SetHits(50000, 55000);
+            this.SetStam(1003, 1114);
 
             this.SetDamage(35, 41);
 
@@ -82,6 +82,9 @@ namespace Server.Mobiles
             this.SetSkill(SkillName.MagicResist, 110.2, 120.0);
             this.SetSkill(SkillName.Tactics, 110.1, 115.0);
             this.SetSkill(SkillName.Wrestling, 110.1, 115.0);
+			this.SetSkill(SkillName.Necromancy, 120.0);
+            this.SetSkill(SkillName.SpiritSpeak, 120.0);
+            this.SetSkill(SkillName.Anatomy, 10.0, 20.0);
 
             this.Fame = 24000;
             this.Karma = -24000;
@@ -162,12 +165,15 @@ namespace Server.Mobiles
         public override void CheckReflect(Mobile caster, ref bool reflect)
         {
             int c = 0;
-            foreach (Mobile m in this.GetMobilesInRange(20))
+            IPooledEnumerable eable = GetMobilesInRange(20);
+
+            foreach (Mobile m in eable)
             {
                 if (m != null && m is DarkWisp)
                     c++;
                 continue;
             }
+            eable.Free();
             if (c > 0)
                 reflect = true; // Reflect spells if ShadowLord having wisps around
         }
@@ -182,8 +188,9 @@ namespace Server.Mobiles
 
             ArrayList list = new ArrayList();
             int count = 0;
+            IPooledEnumerable eable = GetMobilesInRange(20);
 
-            foreach (Mobile m in this.GetMobilesInRange(20))
+            foreach (Mobile m in eable)
             {
                 if (m == this || !this.CanBeHarmful(m))
                 {
@@ -196,6 +203,8 @@ namespace Server.Mobiles
                 else if (m.Player)
                     list.Add(m);
             }
+
+            eable.Free();
 
             foreach (Mobile m in list)
             {
@@ -232,7 +241,8 @@ namespace Server.Mobiles
 
             foreach (DamageStore ds in rights.Where(s => s.m_HasRight))
             {
-                int chance = 75 + (ds.m_Mobile.Luck / 15);
+                int luck = ds.m_Mobile is PlayerMobile ? ((PlayerMobile)ds.m_Mobile).RealLuck : ds.m_Mobile.Luck;
+                int chance = 75 + (luck / 15);
 
                 if (chance > Utility.Random(5000))
                 {

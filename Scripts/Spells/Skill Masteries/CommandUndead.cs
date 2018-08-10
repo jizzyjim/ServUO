@@ -92,6 +92,11 @@ namespace Server.Spells.SkillMasteries
                                 }
                             }
 
+                            if (bc is SkeletalDragon)
+                            {
+                                Server.Engines.Quests.Doom.BellOfTheDead.TryRemoveDragon((SkeletalDragon)bc);
+                            }
+
                             Caster.PlaySound(0x5C4);
                             Caster.SendLocalizedMessage(1156013); // You command the undead to follow and protect you.
                         }
@@ -108,8 +113,42 @@ namespace Server.Spells.SkillMasteries
             //FinishSequence();
         }
 
+        private Type[] _CommandTypes =
+        {
+            typeof(SkeletalDragon)
+        };
+
+        private Type[] _NoCommandTypes =
+        {
+
+            typeof(UnfrozenMummy),
+            typeof(RedDeath),
+            typeof(SirPatrick),
+            typeof(LadyJennifyr),
+            typeof(MasterMikael),
+            typeof(MasterJonath),
+            typeof(LadyMarai),
+            typeof(Niporailem),
+            typeof(PestilentBandage),
+        };
+
         private bool ValidateTarget(BaseCreature bc)
         {
+            if (bc is BaseRenowned || bc is BaseChampion || bc is Server.Engines.Shadowguard.ShadowguardBoss)
+                return false;
+
+            foreach (var t in _CommandTypes)
+            {
+                if (t == bc.GetType())
+                    return true;
+            }
+
+            foreach (var t in _NoCommandTypes)
+            {
+                if (t == bc.GetType())
+                    return false;
+            }
+
             SlayerEntry entry = SlayerGroup.GetEntryByName(SlayerName.Silver);
 
             return entry != null && entry.Slays(bc);

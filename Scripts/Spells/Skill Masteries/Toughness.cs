@@ -16,7 +16,6 @@ namespace Server.Spells.SkillMasteries
 
         public override double UpKeep { get { return 20; } }
         public override int RequiredMana { get { return 20; } }
-        public override int TickTime { get { return 2; } }
 
         public override SkillName CastSkill { get { return SkillName.Macing; } }
         public override SkillName DamageSkill { get { return SkillName.Tactics; } }
@@ -49,7 +48,14 @@ namespace Server.Spells.SkillMasteries
 
         public override void SendCastEffect()
         {
-            Caster.PlaySound(Caster.Female ? 0x338 : 0x44A);
+            if (Caster.Player)
+            {
+                Caster.PlaySound(Caster.Female ? 0x338 : 0x44A);
+            }
+            else if (Caster is BaseCreature)
+            {
+                Caster.PlaySound(((BaseCreature)Caster).GetAngerSound());
+            }
         }
 
         public override void OnCast()

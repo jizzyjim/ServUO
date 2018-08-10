@@ -15,7 +15,8 @@ namespace Server.Items
 		private string m_DateKilled;
 		private MeasuredBy m_MeasuredBy;
         private int m_SouthID;
-		
+        private bool m_FlippedIDs;
+
 		[CommandProperty(AccessLevel.GameMaster)]
 		public string Owner { get { return m_Owner; } set { m_Owner = value; } } 
 	
@@ -34,13 +35,45 @@ namespace Server.Items
 		[CommandProperty(AccessLevel.GameMaster)]
 		public MeasuredBy MeasuredBy { get { return m_MeasuredBy; } set { m_MeasuredBy = value; } }
 
-        public override int LabelNumber { get { return 1084024 + ItemID; } }
-        public virtual Item Deed { get { return new HuntTrophyDeed(m_Owner, m_MeasuredBy, m_Measurement, m_SouthID, m_DateKilled, m_Location, m_Species); } }
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool FlippedIDs { get { return m_FlippedIDs; } set { m_FlippedIDs = value; } }
 
-        public virtual int EastID { get { return m_SouthID + 1; } }
-        public virtual int SouthID { get { return m_SouthID; } }
+        public override int LabelNumber
+        {
+            get
+            {
+                if (Species.Number > 0)
+                    return Species.Number;
 
-		public HuntTrophy(string name, MeasuredBy measuredBy, int measurement, int id, string killed, string location, TextDefinition species)
+                return 1084024 + ItemID;
+            }
+        }
+
+        public virtual Item Deed { get { return new HuntTrophyDeed(m_Owner, m_MeasuredBy, m_Measurement, m_SouthID, m_DateKilled, m_Location, m_Species, m_FlippedIDs); } }
+
+        public virtual int EastID
+        {
+            get
+            {
+                if (m_FlippedIDs)
+                    return m_SouthID;
+
+                return m_SouthID + 1;
+            }
+        }
+
+        public virtual int SouthID
+        {
+            get
+            {
+                if (m_FlippedIDs)
+                    return m_SouthID + 1;
+
+                return m_SouthID;
+            }
+        }
+
+        public HuntTrophy(string name, MeasuredBy measuredBy, int measurement, int id, string killed, string location, TextDefinition species, bool flippedids)
 		{
             m_SouthID = id;
             //ItemID = id;
@@ -50,6 +83,7 @@ namespace Server.Items
 			m_DateKilled = killed;
 			m_MeasuredBy = measuredBy;
             m_Measurement = measurement;
+            m_FlippedIDs = flippedids;
 
 			switch(measuredBy)
 			{
@@ -94,11 +128,16 @@ namespace Server.Items
                 list.Add(1155710, m_Measurement.ToString());	// Wingspan: ~1_VAL~
 		}
 
+        void IChopable.OnChop(Mobile user)
+        {
+            OnDoubleClick(user);
+        }
+
         public override void OnDoubleClick(Mobile from)
         {
             BaseHouse house = BaseHouse.FindHouseAt(this);
 
-            if (house != null && house.IsCoOwner(from))
+            if (house != null && (house.IsCoOwner(from) || (house.Addons.ContainsKey(this) && house.Addons[this] == from)))
             {
                 if (from.InRange(GetWorldLocation(), 1))
                 {
@@ -110,6 +149,10 @@ namespace Server.Items
                     from.SendLocalizedMessage(500295); // You are too far away to do that.
                 }
             }
+            else
+            {
+                from.SendLocalizedMessage(502092); // You must be in your house to do this.
+            }
         }
 		
 		public HuntTrophy(Serial serial) : base(serial)
@@ -119,8 +162,10 @@ namespace Server.Items
 		public override void Serialize(GenericWriter writer)
 		{
 			base.Serialize(writer);
-			writer.Write((int)0);
-			
+			writer.Write((int)1);
+
+            writer.Write(m_FlippedIDs);
+
 			writer.Write(m_Owner);
 			writer.Write(m_Measurement);
 			writer.Write(m_DateKilled);
@@ -134,14 +179,22 @@ namespace Server.Items
 		{
 			base.Deserialize(reader);
 			int v = reader.ReadInt();
-			
-			m_Owner = reader.ReadString();
-			m_Measurement = reader.ReadInt();
-			m_DateKilled = reader.ReadString();
-			m_Location = reader.ReadString();
-			m_Species = TextDefinition.Deserialize(reader);
-			m_MeasuredBy = (MeasuredBy)reader.ReadInt();
-            m_SouthID = reader.ReadInt();
+
+            switch (v)
+            {
+                case 1:
+                    m_FlippedIDs = reader.ReadBool();
+                    goto case 0;
+                case 0:
+                    m_Owner = reader.ReadString();
+                    m_Measurement = reader.ReadInt();
+                    m_DateKilled = reader.ReadString();
+                    m_Location = reader.ReadString();
+                    m_Species = TextDefinition.Deserialize(reader);
+                    m_MeasuredBy = (MeasuredBy)reader.ReadInt();
+                    m_SouthID = reader.ReadInt();
+                    break;
+            }
 		}
 	}
 
@@ -154,6 +207,7 @@ namespace Server.Items
         private string m_DateKilled;
         private MeasuredBy m_MeasuredBy;
         private int m_SouthID;
+        private bool m_FlippedIDs;
 
         [CommandProperty(AccessLevel.GameMaster)]
         public string Owner { get { return m_Owner; } set { m_Owner = value; } }
@@ -173,12 +227,43 @@ namespace Server.Items
         [CommandProperty(AccessLevel.GameMaster)]
         public MeasuredBy MeasuredBy { get { return m_MeasuredBy; } set { m_MeasuredBy = value; } }
 
-        public override int LabelNumber { get { return 1084024 + m_SouthID; } }
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool FlippedIDs { get { return m_FlippedIDs; } set { m_FlippedIDs = value; } }
 
-        public virtual int EastID { get { return m_SouthID + 1; } }
-        public virtual int SouthID { get { return m_SouthID; } }
+        public override int LabelNumber
+        {
+            get
+            {
+                if (Species.Number > 0)
+                    return Species.Number;
 
-        public HuntTrophyDeed(string from, MeasuredBy measuredBy, int measurement, int id, string killed, string location, TextDefinition species)
+                return 1084024 + ItemID;
+            }
+        }
+
+        public virtual int EastID
+        {
+            get
+            {
+                if (m_FlippedIDs)
+                    return m_SouthID;
+
+                return m_SouthID + 1;
+            }
+        }
+
+        public virtual int SouthID
+        {
+            get
+            {
+                if (m_FlippedIDs)
+                    return m_SouthID + 1;
+
+                return m_SouthID;
+            }
+        }
+
+        public HuntTrophyDeed(string from, MeasuredBy measuredBy, int measurement, int id, string killed, string location, TextDefinition species, bool flippedids)
             : base(5359)
         {
             m_SouthID = id;
@@ -188,6 +273,7 @@ namespace Server.Items
             m_DateKilled = killed;
             m_MeasuredBy = measuredBy;
             m_Measurement = measurement;
+            m_FlippedIDs = flippedids;
         }
 
         public override void OnDoubleClick(Mobile from)
@@ -218,7 +304,7 @@ namespace Server.Items
                     int itemID = 0;
 
                     if (northWall)
-                        itemID = m_SouthID;
+                        itemID = SouthID;
                     else if (westWall)
                         itemID = EastID;
                     else
@@ -226,12 +312,12 @@ namespace Server.Items
 
                     if (itemID > 0)
                     {
-                        Item trophy = new HuntTrophy(m_Owner, m_MeasuredBy, m_Measurement, m_SouthID, m_DateKilled, m_Location, m_Species);
+                        Item trophy = new HuntTrophy(m_Owner, m_MeasuredBy, m_Measurement, m_SouthID, m_DateKilled, m_Location, m_Species, m_FlippedIDs);
                         trophy.ItemID = itemID;
 
                         trophy.MoveToWorld(from.Location, from.Map);
 
-                        house.Addons.Add(trophy);
+                        house.Addons[trophy] = from;
                         Delete();
                     }
                 }
@@ -274,7 +360,9 @@ namespace Server.Items
         public override void Serialize(GenericWriter writer)
         {
             base.Serialize(writer);
-            writer.Write((int)0);
+            writer.Write((int)1);
+
+            writer.Write(m_FlippedIDs);
 
             writer.Write(m_Owner);
             writer.Write(m_Measurement);
@@ -290,13 +378,21 @@ namespace Server.Items
             base.Deserialize(reader);
             int v = reader.ReadInt();
 
-            m_Owner = reader.ReadString();
-            m_Measurement = reader.ReadInt();
-            m_DateKilled = reader.ReadString();
-            m_Location = reader.ReadString();
-            m_Species = TextDefinition.Deserialize(reader);
-            m_MeasuredBy = (MeasuredBy)reader.ReadInt();
-            m_SouthID = reader.ReadInt();
+            switch (v)
+            {
+                case 1:
+                    m_FlippedIDs = reader.ReadBool();
+                    goto case 0;
+                case 0:
+                    m_Owner = reader.ReadString();
+                    m_Measurement = reader.ReadInt();
+                    m_DateKilled = reader.ReadString();
+                    m_Location = reader.ReadString();
+                    m_Species = TextDefinition.Deserialize(reader);
+                    m_MeasuredBy = (MeasuredBy)reader.ReadInt();
+                    m_SouthID = reader.ReadInt();
+                    break;
+            }
         }
     }
 }

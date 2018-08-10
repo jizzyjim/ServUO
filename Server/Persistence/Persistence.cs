@@ -1,10 +1,4 @@
-﻿#region Header
-// **********
-// ServUO - Persistence.cs
-// **********
-#endregion
-
-#region References
+﻿#region References
 using System;
 using System.IO;
 #endregion
@@ -111,7 +105,9 @@ namespace Server
 				}
 				catch (Exception e)
 				{
+					Utility.PushColor(ConsoleColor.Red);
 					Console.WriteLine("[Persistence]: {0}", e);
+					Utility.PopColor();
 				}
 				finally
 				{

@@ -41,7 +41,7 @@ namespace Server.Engines.Blackthorn
         private DateTime _NextSpecial;
 
         public override bool AlwaysMurderer { get { return true; } }
-        public override bool CanHeal { get { return AI == AIType.AI_Melee || AI == AIType.AI_Paladin; } }
+        public override double HealChance { get { return AI == AIType.AI_Melee || AI == AIType.AI_Paladin ? 1.0 : 0.0; } }
         public override double WeaponAbilityChance { get { return AI == AIType.AI_Melee || AI == AIType.AI_Paladin ? 0.4 : 0.1; } }
 
         public override WeaponAbility GetWeaponAbility()
@@ -224,7 +224,7 @@ namespace Server.Engines.Blackthorn
 
         public virtual void EquipSpecialty()
         {
-            if (CanHeal)
+            if (AbilityProfile != null && AbilityProfile.HasAbility(SpecialAbility.Heal))
                 PackItem(new Bandage(Utility.RandomMinMax(10, 25)));
 
             SetWearable(new ThighBoots());
@@ -442,7 +442,7 @@ namespace Server.Engines.Blackthorn
             }
             else if (_Sampire)
             {
-                if (0.1 > Utility.RandomDouble() && Weapon is BaseWeapon && !(Weapon is Fists) && !((BaseWeapon)Weapon).Cursed)
+                if (0.1 > Utility.RandomDouble() && Weapon is BaseWeapon && !CurseWeaponSpell.IsCursed(this, (BaseWeapon)Weapon))
                 {
                     CurseWeaponSpell spell = new CurseWeaponSpell(this, null);
                     spell.Cast();
@@ -558,6 +558,40 @@ namespace Server.Engines.Blackthorn
 
             Fame = 48000;
             Karma = -48000;  
+        }
+
+        public override void OnDeath(Container c)
+        {
+            base.OnDeath(c);
+
+            var rights = GetLootingRights();
+            rights.Sort();
+
+            List<Mobile> list = rights.Select(x => x.m_Mobile).Where(m => m.InRange(c.Location, 20)).ToList();
+
+            if(list.Count > 0)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    Mobile drop;
+                    Item item = InvasionController.CreateItem(list[0]);
+
+                    if (list.Count == 1 || i >= list.Count)
+                        drop = list[0];
+                    else
+                        drop = list[i];
+
+                    drop.SendLocalizedMessage(1154530); // You notice the crest of Minax on your fallen foe's equipment and decide it may be of some value...
+
+                    if (drop.Backpack == null || !drop.Backpack.TryDropItem(drop, item, false))
+                    {
+                        drop.BankBox.DropItem(item);
+                        drop.SendLocalizedMessage(1079730); // // The item has been placed into your bank box.
+                    }
+                }
+            }
+
+            ColUtility.Free(list);
         }
 
         public override void GenerateLoot()

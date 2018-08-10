@@ -17,7 +17,7 @@ namespace Server.Mobiles
 
             foreach (Mobile mob in World.Mobiles.Values)
             {
-                if (mob != null && mob is PlayerMobile && mob.Kills >= 5)
+                if (mob != null && mob is PlayerMobile && mob.Murderer)
                     m_RedNames.Add(mob.Name);
             }
         }
@@ -64,8 +64,6 @@ namespace Server.Mobiles
             Hue = Race.RandomSkinHue();
 
             Body = Female ? 0x191 : 0x190;
-
-            AddItem(new ShortPants(Utility.RandomNeutralHue()));
 
             SetStr(500, 750);
             SetDex(125, 175);

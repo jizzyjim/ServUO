@@ -4,8 +4,10 @@ using Server.Engines.Craft;
 namespace Server.Items
 {
     [Alterable(typeof(DefTinkering), typeof(GargishGlasses), true)]
-    public class ElvenGlasses : BaseArmor
+    public class ElvenGlasses : BaseArmor, IRepairable
     {
+        public CraftSystem RepairSystem { get { return DefTinkering.CraftSystem; } }
+
         private AosWeaponAttributes m_AosWeaponAttributes;
         [Constructable]
         public ElvenGlasses()
@@ -184,6 +186,17 @@ namespace Server.Items
 
             if ((prop = this.m_AosWeaponAttributes.HitLeechStam) != 0)
                 list.Add(1060430, prop.ToString()); // hit stamina leech ~1_val~%
+        }
+
+        public override void OnAfterDuped(Item newItem)
+        {
+            base.OnAfterDuped(newItem);
+
+            if (newItem is GargishGlasses)
+                ((GargishGlasses)newItem).WeaponAttributes = new AosWeaponAttributes(newItem, m_AosWeaponAttributes);
+
+            if (newItem is ElvenGlasses)
+                ((ElvenGlasses)newItem).m_AosWeaponAttributes = new AosWeaponAttributes(newItem, m_AosWeaponAttributes);
         }
 
         public override void Serialize(GenericWriter writer)

@@ -1,4 +1,4 @@
-﻿using Server.Commands;
+using Server.Commands;
 using System;
 using System.Collections.Generic;
 
@@ -24,22 +24,28 @@ namespace Server.Items
         private List<Item> m_Barrels;
         private Timer m_RestartTimer;
         private DateTime m_RestartTime;
+		
+		public List<Item> Barrels
+        {
+            get { return m_Barrels; }
+            set { m_Barrels = value; }
+        }
 
         [CommandProperty(AccessLevel.GameMaster)]
         public bool Active
         {
             get
             {
-                return this.m_Active;
+                return m_Active;
             }
             set
             {
                 if (value)
-                    this.Start();
+                    Start();
                 else
-                    this.Stop();
+                    Stop();
 
-                this.InvalidateProperties();
+                InvalidateProperties();
             }
         }
 
@@ -48,21 +54,23 @@ namespace Server.Items
         {
             get
             {
-                return this.m_RestartTime;
+                return m_RestartTime;
             }
         }
+
+        public override bool IsDecoContainer { get { return false; } }
 
         [CommandProperty(AccessLevel.GameMaster)]
         public Parts Type
         {
             get
             {
-                return this.m_Type;
+                return m_Type;
             }
             set
             {
-                this.m_Type = value;
-                this.InvalidateProperties();
+                m_Type = value;
+                InvalidateProperties();
             }
         }
 
@@ -70,12 +78,12 @@ namespace Server.Items
         public StorageLocker(Parts type)
             : base(0x285E)
         {
-            this.m_Barrels = new List<Item>();
+            m_Barrels = new List<Item>();
 
-            this.Locked = true;
-            this.Hue = 2301;
-            this.Movable = false;
-            this.m_Type = type;
+            Locked = true;
+            Hue = 2301;
+            Movable = false;
+            m_Type = type;
         }
 
         public StorageLocker(Serial serial)
@@ -106,39 +114,39 @@ namespace Server.Items
 
         public void Start()
         {
-            if (this.m_Active || this.Deleted)
+            if (m_Active || Deleted)
                 return;
 
-            this.m_Active = true;
+            m_Active = true;
 
-            if (this.m_RestartTimer != null)
-                this.m_RestartTimer.Stop();
+            if (m_RestartTimer != null)
+                m_RestartTimer.Stop();
 
-            this.m_RestartTimer = null;
+            m_RestartTimer = null;
 
             int index = Utility.Random(0, 8);
             int randomkey = Utility.Random(-4, 4);            
             bool loot = false;
-            Item barrel;
+            Item barrel = null;
 
             for (int k = 0; k < 8; k++)
             {
-                int itemx = this.Location.X + WoodenToMetalBarrelCoordinate[k][0];
-                int itemy = this.Location.Y + WoodenToMetalBarrelCoordinate[k][1];
+                int itemx = Location.X + WoodenToMetalBarrelCoordinate[k][0];
+                int itemy = Location.Y + WoodenToMetalBarrelCoordinate[k][1];
                 int z = Map.GetAverageZ(itemx, itemy);
 
                 if (index == k)
                 {
                     barrel = new WoodenKeyBarrel(Parts.None);
-                    this.m_Barrels.Add(barrel);
+                    m_Barrels.Add(barrel);
                 }
                 else
                 {
-                    barrel = new WoodenToMetalBarrel();
-                    this.m_Barrels.Add(barrel);
+                    barrel = new WoodenToMetalBarrel(this);
+                    m_Barrels.Add(barrel);
                 }
 
-                barrel.MoveToWorld(new Point3D(itemx, itemy, z), this.Map);
+                barrel.MoveToWorld(new Point3D(itemx, itemy, z), Map);
             }
 
             for (int x = -4; x < 5; x++)
@@ -148,8 +156,8 @@ namespace Server.Items
                     if ((x >= -1 && x <= 1) && (y >= -1 && y <= 1))
                         continue;
 
-                    int itemx = this.Location.X + x;
-                    int itemy = this.Location.Y + y;
+                    int itemx = Location.X + x;
+                    int itemy = Location.Y + y;
                     int z = Map.GetAverageZ(itemx, itemy);
 
                     if (!loot)
@@ -158,67 +166,75 @@ namespace Server.Items
                         {
                             key = m_Type;
                             loot = true;
+
+                            barrel = new WoodenKeyBarrel(key);
+                            ((WoodenKeyBarrel)barrel).StorageLocker = this;
+                        }
+                        else
+                        {
+                            key = Parts.None;
+                            barrel = new WoodenKeyBarrel(key);
                         }
                     }
                     else
                     {
                         key = Parts.None;
+                        barrel = new WoodenKeyBarrel(key);
                     }
 
-                    barrel = new WoodenKeyBarrel(key);
-                    this.m_Barrels.Add(barrel);                    
+                    m_Barrels.Add(barrel);                 
 
-                    barrel.MoveToWorld(new Point3D(itemx, itemy, z), this.Map);
+                    barrel.MoveToWorld(new Point3D(itemx, itemy, z), Map);
                 }
             }            
         }
 
         public void Stop()
         {
-            if (!this.m_Active || this.Deleted)
+            if (!m_Active || Deleted)
                 return;
 
-            this.m_Active = false;
+            m_Active = false;
 
-            if (this.m_RestartTimer != null)
-                this.m_RestartTimer.Stop();
+            if (m_RestartTimer != null)
+                m_RestartTimer.Stop();
 
-            this.m_RestartTimer = null;
+            m_RestartTimer = null;
 
-            if (this.m_Barrels != null)
+            if (m_Barrels != null)
             {                
-                for (int i = 0; i < this.m_Barrels.Count; ++i)
+                for (int i = 0; i < m_Barrels.Count; ++i)
                 {
-                    if (this.m_Barrels[i] != null)
-                        this.m_Barrels[i].Delete();
+                    if (m_Barrels[i] != null)
+                        m_Barrels[i].Delete();
                 }
 
-                this.m_Barrels.Clear();
+                m_Barrels.Clear();
             }
             
-            for (int i = this.Items.Count - 1; i >= 0; --i)
+            for (int i = Items.Count - 1; i >= 0; --i)
             {
-                if (i < this.Items.Count)
-                    this.Items[i].Delete();
+                if (i < Items.Count)
+                    Items[i].Delete();
             }
         }
 
         public void BeginRestart(TimeSpan ts)
         {
-            if (this.m_RestartTimer != null)
-                this.m_RestartTimer.Stop();
+            if (m_RestartTimer != null)
+                m_RestartTimer.Stop();
 
-            this.m_RestartTime = DateTime.UtcNow + ts;
+            m_RestartTime = DateTime.UtcNow + ts;
 
-            this.m_RestartTimer = new RestartTimer(this, ts);
-            this.m_RestartTimer.Start();
+            m_RestartTimer = new RestartTimer(this, ts);
+            m_RestartTimer.Start();
         }
-        
-        public override void OnAfterDelete()
-        {
-            base.OnAfterDelete();
 
-            Stop();                
+        public override void OnDelete()
+        {
+            Stop();
+
+            base.OnDelete();
         }
 
         public override void Serialize(GenericWriter writer)
@@ -226,14 +242,14 @@ namespace Server.Items
             base.Serialize(writer);
             writer.Write((int)0); // version
 
-            writer.Write((bool)this.m_Active);
-            writer.Write((int)this.m_Type);            
-            writer.Write(this.m_Barrels, true);
+            writer.Write((bool)m_Active);
+            writer.Write((int)m_Type);            
+            writer.Write(m_Barrels, true);
 
-            writer.Write(this.m_RestartTimer != null);
+            writer.Write(m_RestartTimer != null);
 
-            if (this.m_RestartTimer != null)
-                writer.WriteDeltaTime(this.m_RestartTime);
+            if (m_RestartTimer != null)
+                writer.WriteDeltaTime(m_RestartTime);
         }
 
         public override void Deserialize(GenericReader reader)
@@ -241,14 +257,16 @@ namespace Server.Items
             base.Deserialize(reader);
             int version = reader.ReadInt();
 
-            this.m_Active = reader.ReadBool();
-            this.m_Type = (Parts)reader.ReadInt();
-            this.m_Barrels = reader.ReadStrongItemList();
+            m_Active = reader.ReadBool();
+            m_Type = (Parts)reader.ReadInt();
+            m_Barrels = reader.ReadStrongItemList();
 
             if (reader.ReadBool())
             {
-                this.m_RestartTime = reader.ReadDeltaTime();
+                m_RestartTime = reader.ReadDeltaTime();
             }
+			
+			BeginRestart(TimeSpan.FromSeconds(10.0));
         }
     }
 
@@ -258,14 +276,14 @@ namespace Server.Items
         public RestartTimer(StorageLocker storage, TimeSpan delay)
             : base(delay)
         {
-            this.m_Storage = storage;
-            this.Priority = TimerPriority.FiveSeconds;
+            m_Storage = storage;
+            Priority = TimerPriority.FiveSeconds;
         }
 
         protected override void OnTick()
         {
-            this.m_Storage.Stop();
-            this.m_Storage.Start();
+            m_Storage.Stop();
+            m_Storage.Start();
         }
     }
 }

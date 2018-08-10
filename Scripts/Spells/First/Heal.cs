@@ -26,16 +26,6 @@ namespace Server.Spells.First
                 return SpellCircle.First;
             }
         }
-        public override bool CheckCast()
-        {
-            if (Engines.ConPVP.DuelContext.CheckSuddenDeath(this.Caster))
-            {
-                this.Caster.SendMessage(0x22, "You cannot cast this spell when in sudden death.");
-                return false;
-            }
-
-            return base.CheckCast();
-        }
 
         public override void OnCast()
         {
@@ -56,7 +46,7 @@ namespace Server.Spells.First
             {
                 this.Caster.SendLocalizedMessage(1061654); // You cannot heal that which is not alive.
             }
-            else if (m is Golem)
+            else if (m is IRepairableMobile)
             {
                 this.Caster.LocalOverheadMessage(MessageType.Regular, 0x3B2, 500951); // You cannot heal that.
             }
