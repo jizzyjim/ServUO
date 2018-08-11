@@ -112,6 +112,8 @@ namespace Server.Mobiles
             }
         }
 
+        public override bool CanAutoStable { get { return (Backpack == null || Backpack.Items.Count == 0) && base.CanAutoStable; } }
+
         public Beetle(Serial serial)
             : base(serial)
         {
@@ -188,7 +190,12 @@ namespace Server.Mobiles
 
         public override void OnAfterTame(Mobile tamer)
         {
-            SetInt(500);
+            base.OnAfterTame(tamer);
+
+            if (PetTrainingHelper.Enabled)
+            {
+                SetInt(500);
+            }
         }
 
         public override void Serialize(GenericWriter writer)

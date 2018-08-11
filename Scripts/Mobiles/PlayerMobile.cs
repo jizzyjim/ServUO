@@ -876,7 +876,6 @@ namespace Server.Mobiles
 
             #region Enchanced Client
             EventSink.TargetedSkill += Targeted_Skill;
-            EventSink.TargetedItemUse += Targeted_Item;
             EventSink.EquipMacro += EquipMacro;
             EventSink.UnequipMacro += UnequipMacro;
             #endregion
@@ -888,33 +887,6 @@ namespace Server.Mobiles
 		}
 
         #region Enhanced Client
-        private static void Targeted_Item(TargetedItemUseEventArgs e)
-        {
-            Mobile from = e.Mobile;
-            Item item = World.FindItem(e.Source.Serial);
-            IEntity target = e.Target;
-
-            if (from == null || item == null || target == null)
-                return;
-
-            if (item is Bandage && target is Mobile)
-            {
-                Bandage.BandageTargetRequest((Bandage)item, from, (Mobile)target);
-            }
-            else if (from.InRange(item.GetWorldLocation(), Core.AOS ? 2 : 1))
-            {
-                from.TargetLocked = true;
-                from.Use(item);
-
-                if (from.Target != null)
-                {
-                    from.Target.Invoke(from, target);
-                }
-
-                from.TargetLocked = false;
-            }
-        }
-
         private static void Targeted_Skill(TargetedSkillEventArgs e)
         {
             Mobile from = e.Mobile;
@@ -6793,33 +6765,18 @@ namespace Server.Mobiles
 				{
 					BaseCreature pet = AllFollowers[i] as BaseCreature;
 
-					if (pet == null || pet.ControlMaster == null || pet.Allured)
-					{
-						continue;
-					}
+                    if (pet == null)
+                    {
+                        continue;
+                    }
 
-					if (pet.Summoned)
-					{
-						if (pet.Map != Map)
-						{
-							pet.PlaySound(pet.GetAngerSound());
-							Timer.DelayCall(TimeSpan.Zero, pet.Delete);
-						}
-						continue;
-					}
+                    if (pet.Summoned && pet.Map != Map)
+                    {
+                        pet.PlaySound(pet.GetAngerSound());
+                        Timer.DelayCall(TimeSpan.Zero, pet.Delete);
+                    }
 
-					if (pet is IMount && ((IMount)pet).Rider != null)
-					{
-						continue;
-					}
-
-					if ((pet is PackLlama || pet is PackHorse || pet is Beetle) &&
-						(pet.Backpack != null && pet.Backpack.Items.Count > 0))
-					{
-						continue;
-					}
-
-					if (pet is BaseEscortable)
+					if (!pet.CanAutoStable)
 					{
 						continue;
 					}
